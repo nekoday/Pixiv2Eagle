@@ -140,17 +140,96 @@
         }
     }
 
+    // 监听URL变化
+    function observeUrlChanges() {
+        // 监听 popstate 事件（后退/前进按钮触发）
+        window.addEventListener('popstate', () => {
+            if (location.pathname.includes('/artworks/')) {
+                handleArtworkPageChange();
+            }
+        });
+
+        // 重写 history.pushState
+        const originalPushState = history.pushState;
+        history.pushState = function() {
+            originalPushState.apply(this, arguments);
+            if (location.pathname.includes('/artworks/')) {
+                handleArtworkPageChange();
+            }
+        };
+
+        // 重写 history.replaceState
+        const originalReplaceState = history.replaceState;
+        history.replaceState = function() {
+            originalReplaceState.apply(this, arguments);
+            if (location.pathname.includes('/artworks/')) {
+                handleArtworkPageChange();
+            }
+        };
+    }
+
+    // 处理作品页面变化
+    function handleArtworkPageChange() {
+        // 立即尝试添加按钮
+        addButton();
+
+        // 设置一个观察器来监视DOM变化
+        const observer = new MutationObserver((mutations, obs) => {
+            // 检查目标section是否存在
+            const targetSection = document.querySelector('section[class*="sc-a74b10e0-0"]');
+            if (targetSection) {
+                // 如果section存在但没有我们的按钮，添加按钮
+                const button = targetSection.querySelector('.eagle-save-button');
+                if (!button) {
+                    addButton();
+                }
+            }
+        });
+
+        // 配置观察器
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+
+        // 30秒后停止观察（避免无限观察）
+        setTimeout(() => {
+            observer.disconnect();
+        }, 30000);
+
+        // 同时设置一个间隔检查
+        let checkCount = 0;
+        const intervalId = setInterval(() => {
+            const targetSection = document.querySelector('section[class*="sc-a74b10e0-0"]');
+            if (targetSection) {
+                const button = targetSection.querySelector('.eagle-save-button');
+                if (!button) {
+                    addButton();
+                }
+            }
+            
+            checkCount++;
+            if (checkCount >= 10) { // 5秒后停止检查（500ms * 10）
+                clearInterval(intervalId);
+            }
+        }, 500);
+    }
+
     // 等待目标section元素加载
     function waitForElement(selector) {
         return new Promise(resolve => {
-            if (document.querySelector(selector)) {
-                return resolve(document.querySelector(selector));
+            // 首先检查元素是否已经存在
+            const element = document.querySelector(selector);
+            if (element) {
+                return resolve(element);
             }
 
-            const observer = new MutationObserver(mutations => {
-                if (document.querySelector(selector)) {
-                    observer.disconnect();
-                    resolve(document.querySelector(selector));
+            // 如果元素不存在，设置观察器
+            const observer = new MutationObserver((mutations, obs) => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    obs.disconnect();
+                    resolve(element);
                 }
             });
 
@@ -158,6 +237,12 @@
                 childList: true,
                 subtree: true
             });
+
+            // 10秒后超时
+            setTimeout(() => {
+                observer.disconnect();
+                resolve(null);
+            }, 10000);
         });
     }
 
@@ -165,6 +250,7 @@
     function createPixivStyledButton(text) {
         const button = document.createElement('div');
         button.textContent = text;
+        button.className = 'eagle-save-button';  // 添加类名以便识别
         button.style.cursor = 'pointer';
         button.style.fontSize = '14px';
         button.style.padding = '8px 16px';
@@ -373,9 +459,22 @@
 
     // 主函数
     async function addButton() {
+        // 移除旧按钮（如果存在）
+        const oldButton = document.querySelector('.eagle-save-button');
+        if (oldButton) {
+            const wrapper = oldButton.closest('div[class*="sc-a74b10e0-"]');
+            if (wrapper) {
+                wrapper.remove();
+            }
+        }
+
         // 等待目标section加载
         const targetSection = await waitForElement('section[class*="sc-a74b10e0-0"]');
+        if (!targetSection) return;  // 如果找不到目标section，直接返回
         
+        // 检查按钮是否已经存在（双重检查，以防在等待过程中已添加）
+        if (targetSection.querySelector('.eagle-save-button')) return;
+
         // 找到section中最后一个div的类名作为参考
         const lastDiv = targetSection.querySelector('div[class*="sc-a74b10e0-"]');
         if (!lastDiv) return;
@@ -460,5 +559,12 @@
     }
 
     // 启动脚本
-    addButton();
+    try {
+        if (location.pathname.includes('/artworks/')) {
+            handleArtworkPageChange();
+        }
+        observeUrlChanges();
+    } catch (error) {
+        console.error('脚本启动失败:', error);
+    }
 })();
