@@ -1,7 +1,7 @@
 // ==UserScript==
-// @name         Save to Eagle
+// @name         Pixiv2Eagle
 // @icon         https://www.pixiv.net/favicon.ico
-// @version      0.1
+// @version      1.0
 // @description  Save Pixiv Artworks to Eagle
 // @author       neko
 // @match        https://www.pixiv.net/artworks/*
