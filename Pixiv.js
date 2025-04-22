@@ -289,26 +289,43 @@
     // 创建画师专属文件夹
     async function createArtistFolder(pixivFolderId, artistName, artistId) {
         try {
-            const data = await gmFetch('http://localhost:41595/api/folder/create', {
+            // 第一步：在Pixiv文件夹下创建画师文件夹
+            const createData = await gmFetch('http://localhost:41595/api/folder/create', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    parent_folder_id: pixivFolderId,
-                    name: artistName,
-                    description: `pid = ${artistId}`,
-                    children: []
+                    folderName: artistName,
+                    parent: pixivFolderId
                 })
             });
             
-            if (!data.status) {
+            if (!createData.status) {
                 throw new Error('创建文件夹失败');
+            }
+
+            const newFolderId = createData.data.id;
+
+            // 第二步：更新文件夹描述
+            const updateData = await gmFetch('http://localhost:41595/api/folder/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    folderId: newFolderId,
+                    newDescription: `pid = ${artistId}`
+                })
+            });
+
+            if (!updateData.status) {
+                throw new Error('更新文件夹描述失败');
             }
             
             return {
-                id: data.data.id,
-                name: data.data.name
+                id: newFolderId,
+                name: artistName
             };
         } catch (error) {
             console.error('创建画师文件夹失败:', error);
