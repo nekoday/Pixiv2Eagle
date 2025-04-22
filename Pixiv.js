@@ -109,23 +109,45 @@
         return processedTags;
     }
 
+    // 获取作品页面信息
+    async function getArtworkPages(artworkId) {
+        try {
+            const response = await fetch(`https://www.pixiv.net/ajax/illust/${artworkId}/pages?lang=zh`);
+            const data = await response.json();
+            
+            if (!data.body || !Array.isArray(data.body)) {
+                throw new Error('无法获取作品页面信息');
+            }
+
+            return {
+                pageCount: data.body.length,
+                originalUrls: data.body.map(page => page.urls.original)
+            };
+        } catch (error) {
+            console.error('获取作品页面信息失败:', error);
+            throw error;
+        }
+    }
+
     // 获取作品详细信息
     async function getArtworkDetails(artworkId) {
         try {
-            const response = await fetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`);
-            const data = await response.json();
+            const [basicInfo, pagesInfo] = await Promise.all([
+                fetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`).then(r => r.json()),
+                getArtworkPages(artworkId)
+            ]);
             
-            if (!data.body) {
+            if (!basicInfo.body) {
                 throw new Error('无法获取作品信息');
             }
 
             const details = {
-                userName: data.body.userName,
-                userId: data.body.userId,
-                illustTitle: data.body.illustTitle,
-                pageCount: data.body.pageCount,
-                originalUrl: data.body.urls.original,
-                tags: processTags(data.body.tags.tags, data.body.isOriginal, data.body.aiType)
+                userName: basicInfo.body.userName,
+                userId: basicInfo.body.userId,
+                illustTitle: basicInfo.body.illustTitle,
+                pageCount: pagesInfo.pageCount,
+                originalUrls: pagesInfo.originalUrls,
+                tags: processTags(basicInfo.body.tags.tags, basicInfo.body.isOriginal, basicInfo.body.aiType)
             };
 
             return details;
@@ -170,7 +192,8 @@
                     `作品名称: ${details.illustTitle}`,
                     `页数: ${details.pageCount}`,
                     `标签: ${details.tags.join(', ')}`,
-                    `原图地址: ${details.originalUrl}`
+                    `原图地址:`,
+                    ...details.originalUrls.map((url, index) => `[${index + 1}] ${url}`)
                 ].join('\n');
 
                 alert(message);
