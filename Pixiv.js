@@ -6,10 +6,31 @@
 // @author       neko
 // @match        https://www.pixiv.net/artworks/*
 // @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @grant        GM_registerMenuCommand
 // ==/UserScript==
 
 (function() {
     'use strict';
+
+    // 获取文件夹ID
+    function getFolderId() {
+        return GM_getValue('pixivFolderId', '');
+    }
+
+    // 设置文件夹ID
+    function setFolderId() {
+        const currentId = getFolderId();
+        const newId = prompt('请输入 Pixiv 文件夹 ID:', currentId);
+        if (newId !== null) {
+            GM_setValue('pixivFolderId', newId.trim());
+            alert(`文件夹 ID 已设置为: ${newId.trim()}`);
+        }
+    }
+
+    // 注册菜单命令
+    GM_registerMenuCommand('设置 Pixiv 文件夹 ID', setFolderId);
 
     // 检查Eagle是否运行
     async function checkEagle() {
@@ -196,10 +217,13 @@
         
         // 添加点击事件
         button.addEventListener('click', async () => {
+            const folderId = getFolderId();
+            const folderInfo = folderId ? `目标文件夹 ID: ${folderId}` : '未设置目标文件夹 ID';
+
             // 首先检查Eagle是否运行
             const eagleStatus = await checkEagle();
             if (!eagleStatus.running) {
-                alert('Eagle 未启动，请先启动 Eagle 应用');
+                alert(`${folderInfo}\nEagle 未启动，请先启动 Eagle 应用`);
                 return;
             }
 
@@ -212,6 +236,8 @@
             try {
                 const details = await getArtworkDetails(artworkId);
                 const message = [
+                    folderInfo,
+                    '----------------------------',
                     `Eagle版本: ${eagleStatus.version}`,
                     '----------------------------',
                     `作品ID: ${artworkId}`,
@@ -225,7 +251,7 @@
 
                 alert(message);
             } catch (error) {
-                alert('获取作品信息失败');
+                alert(`${folderInfo}\n获取作品信息失败`);
             }
         });
         
