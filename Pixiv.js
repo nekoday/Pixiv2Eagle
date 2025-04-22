@@ -83,6 +83,32 @@
         return match ? match[1] : null;
     }
 
+    // 处理标签
+    function processTags(tags, isOriginal, aiType) {
+        if (!Array.isArray(tags)) return [];
+        
+        const processedTags = tags.flatMap(tagInfo => {
+            const tags = [tagInfo.tag];
+            // 如果有翻译且有英文翻译，添加英文翻译作为额外的标签
+            if (tagInfo.translation && tagInfo.translation.en) {
+                tags.push(tagInfo.translation.en);
+            }
+            return tags;
+        });
+
+        // 如果是原创作品，在标签列表开头添加"原创"标签
+        if (isOriginal) {
+            processedTags.unshift('原创');
+        }
+
+        // 如果是AI生成的作品，在标签列表开头添加"AI生成"标签
+        if (aiType === 2) {
+            processedTags.unshift('AI生成');
+        }
+
+        return processedTags;
+    }
+
     // 获取作品详细信息
     async function getArtworkDetails(artworkId) {
         try {
@@ -98,7 +124,8 @@
                 userId: data.body.userId,
                 illustTitle: data.body.illustTitle,
                 pageCount: data.body.pageCount,
-                originalUrl: data.body.urls.original
+                originalUrl: data.body.urls.original,
+                tags: processTags(data.body.tags.tags, data.body.isOriginal, data.body.aiType)
             };
 
             return details;
@@ -142,6 +169,7 @@
                     `作者: ${details.userName} (ID: ${details.userId})`,
                     `作品名称: ${details.illustTitle}`,
                     `页数: ${details.pageCount}`,
+                    `标签: ${details.tags.join(', ')}`,
                     `原图地址: ${details.originalUrl}`
                 ].join('\n');
 
