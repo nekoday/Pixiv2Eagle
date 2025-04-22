@@ -14,6 +14,9 @@
 (function() {
     'use strict';
 
+    // 常量定义
+    const EAGLE_SAVE_BUTTON_ID = 'eagle-save-button';
+
     // 获取文件夹ID
     function getFolderId() {
         return GM_getValue('pixivFolderId', '');
@@ -179,7 +182,7 @@
             const targetSection = document.querySelector('section[class*="sc-a74b10e0-0"]');
             if (targetSection) {
                 // 如果section存在但没有我们的按钮，添加按钮
-                const button = targetSection.querySelector('.eagle-save-button');
+                const button = document.getElementById(EAGLE_SAVE_BUTTON_ID);
                 if (!button) {
                     addButton();
                 }
@@ -202,7 +205,7 @@
         const intervalId = setInterval(() => {
             const targetSection = document.querySelector('section[class*="sc-a74b10e0-0"]');
             if (targetSection) {
-                const button = targetSection.querySelector('.eagle-save-button');
+                const button = document.getElementById(EAGLE_SAVE_BUTTON_ID);
                 if (!button) {
                     addButton();
                 }
@@ -250,7 +253,7 @@
     function createPixivStyledButton(text) {
         const button = document.createElement('div');
         button.textContent = text;
-        button.className = 'eagle-save-button';  // 添加类名以便识别
+        button.id = EAGLE_SAVE_BUTTON_ID;
         button.style.cursor = 'pointer';
         button.style.fontSize = '14px';
         button.style.padding = '8px 16px';
@@ -460,7 +463,7 @@
     // 主函数
     async function addButton() {
         // 移除旧按钮（如果存在）
-        const oldButton = document.querySelector('.eagle-save-button');
+        const oldButton = document.getElementById(EAGLE_SAVE_BUTTON_ID);
         if (oldButton) {
             const wrapper = oldButton.closest('div[class*="sc-a74b10e0-"]');
             if (wrapper) {
@@ -473,7 +476,7 @@
         if (!targetSection) return;  // 如果找不到目标section，直接返回
         
         // 检查按钮是否已经存在（双重检查，以防在等待过程中已添加）
-        if (targetSection.querySelector('.eagle-save-button')) return;
+        if (document.getElementById(EAGLE_SAVE_BUTTON_ID)) return;
 
         // 找到section中最后一个div的类名作为参考
         const lastDiv = targetSection.querySelector('div[class*="sc-a74b10e0-"]');
@@ -492,7 +495,7 @@
         // 添加点击事件
         button.addEventListener('click', async () => {
             const folderId = getFolderId();
-            const folderInfo = folderId ? `目标文件夹 ID: ${folderId}` : '未设置目标文件夹 ID';
+            const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : '未设置 Pixiv 文件夹 ID';
 
             // 首先检查Eagle是否运行
             const eagleStatus = await checkEagle();
