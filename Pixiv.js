@@ -52,11 +52,29 @@
         }
     }
 
+    // 封装 GM_xmlhttpRequest 为 Promise
+    function gmFetch(url, options = {}) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: options.method || 'GET',
+                url: url,
+                headers: options.headers || {},
+                data: options.body,
+                responseType: 'json',
+                onload: function(response) {
+                    resolve(response.response);
+                },
+                onerror: function(error) {
+                    reject(error);
+                }
+            });
+        });
+    }
+
     // 检查Eagle是否运行
     async function checkEagle() {
         try {
-            const response = await fetch('http://localhost:41595/api/application/info');
-            const data = await response.json();
+            const data = await gmFetch('http://localhost:41595/api/application/info');
             return {
                 running: true,
                 version: data.data.version
@@ -90,8 +108,7 @@
     async function getArtistFolder(pixivFolderId, artistId) {
         try {
             // 获取所有文件夹列表
-            const response = await fetch('http://localhost:41595/api/folder/list');
-            const data = await response.json();
+            const data = await gmFetch('http://localhost:41595/api/folder/list');
             
             if (!data.status || !Array.isArray(data.data)) {
                 throw new Error('无法获取文件夹列表');
@@ -269,6 +286,74 @@
         }
     }
 
+    // 创建画师专属文件夹
+    async function createArtistFolder(pixivFolderId, artistName, artistId) {
+        try {
+            const data = await gmFetch('http://localhost:41595/api/folder/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    parent_folder_id: pixivFolderId,
+                    name: artistName,
+                    description: `pid = ${artistId}`,
+                    children: []
+                })
+            });
+            
+            if (!data.status) {
+                throw new Error('创建文件夹失败');
+            }
+            
+            return {
+                id: data.data.id,
+                name: data.data.name
+            };
+        } catch (error) {
+            console.error('创建画师文件夹失败:', error);
+            throw error;
+        }
+    }
+
+    // 保存图片到Eagle
+    async function saveToEagle(imageUrls, folderId, details, artworkId) {
+        try {
+            const baseTitle = details.illustTitle;
+            const isMultiPage = imageUrls.length > 1;
+            const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
+            
+            // 批量添加图片
+            const data = await gmFetch('http://localhost:41595/api/item/addFromURLs', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    items: imageUrls.map((url, index) => ({
+                        url: url,
+                        name: isMultiPage ? `${baseTitle}_${index}` : baseTitle,
+                        website: artworkUrl,
+                        tags: details.tags,
+                        headers: {
+                            "referer": "https://www.pixiv.net/"
+                        },
+                    })),
+                    folderId: folderId
+                })
+            });
+
+            if (!data.status) {
+                throw new Error('保存图片失败');
+            }
+
+            return data.data;
+        } catch (error) {
+            console.error('保存图片失败:', error);
+            throw error;
+        }
+    }
+
     // 主函数
     async function addButton() {
         // 等待目标section加载
@@ -309,18 +394,28 @@
             try {
                 const details = await getArtworkDetails(artworkId);
                 
-                // 检查画师专属文件夹
-                let artistFolderInfo = '未找到画师专属文件夹';
+                // 检查或创建画师专属文件夹
+                let artistFolder = null;
                 if (folderId) {
-                    const artistFolder = await getArtistFolder(folderId, details.userId);
-                    if (artistFolder.exists) {
-                        artistFolderInfo = `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`;
+                    const existingFolder = await getArtistFolder(folderId, details.userId);
+                    if (existingFolder.exists) {
+                        artistFolder = existingFolder;
+                    } else {
+                        // 创建新的画师文件夹
+                        artistFolder = await createArtistFolder(folderId, details.userName, details.userId);
                     }
                 }
 
+                if (!artistFolder) {
+                    throw new Error('无法获取或创建画师文件夹');
+                }
+
+                // 保存图片到Eagle
+                await saveToEagle(details.originalUrls, artistFolder.id, details, artworkId);
+                
                 const message = [
                     folderInfo,
-                    artistFolderInfo,
+                    `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`,
                     '----------------------------',
                     `Eagle版本: ${eagleStatus.version}`,
                     '----------------------------',
@@ -329,13 +424,14 @@
                     `作品名称: ${details.illustTitle}`,
                     `页数: ${details.pageCount}`,
                     `标签: ${details.tags.join(', ')}`,
-                    `原图地址:`,
-                    ...details.originalUrls.map((url, index) => `[${index + 1}] ${url}`)
+                    '----------------------------',
+                    '✅ 图片已成功保存到 Eagle'
                 ].join('\n');
 
                 showMessage(message);
             } catch (error) {
-                showMessage(`${folderInfo}\n获取作品信息失败`, true);
+                console.error(error);
+                showMessage(`${folderInfo}\n保存图片失败: ${error.message}`, true);
             }
         });
         
