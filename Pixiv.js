@@ -5,11 +5,29 @@
 // @description  Save Pixiv Artworks to Eagle
 // @author       neko
 // @match        https://www.pixiv.net/artworks/*
-// @grant        none
+// @grant        GM_xmlhttpRequest
 // ==/UserScript==
 
 (function() {
     'use strict';
+
+    // 检查Eagle是否运行
+    async function checkEagle() {
+        try {
+            const response = await fetch('http://localhost:41595/api/application/info');
+            const data = await response.json();
+            return {
+                running: true,
+                version: data.data.version
+            };
+        } catch (error) {
+            console.error('Eagle 未启动或无法连接:', error);
+            return {
+                running: false,
+                version: null
+            };
+        }
+    }
 
     // 等待目标section元素加载
     function waitForElement(selector) {
@@ -178,6 +196,13 @@
         
         // 添加点击事件
         button.addEventListener('click', async () => {
+            // 首先检查Eagle是否运行
+            const eagleStatus = await checkEagle();
+            if (!eagleStatus.running) {
+                alert('Eagle 未启动，请先启动 Eagle 应用');
+                return;
+            }
+
             const artworkId = getArtworkId();
             if (!artworkId) {
                 alert('无法获取作品ID');
@@ -187,6 +212,8 @@
             try {
                 const details = await getArtworkDetails(artworkId);
                 const message = [
+                    `Eagle版本: ${eagleStatus.version}`,
+                    '----------------------------',
                     `作品ID: ${artworkId}`,
                     `作者: ${details.userName} (ID: ${details.userId})`,
                     `作品名称: ${details.illustTitle}`,
