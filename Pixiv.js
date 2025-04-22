@@ -29,8 +29,28 @@
         }
     }
 
+    // 获取调试模式状态
+    function getDebugMode() {
+        return GM_getValue('debugMode', false);
+    }
+
+    // 切换调试模式
+    function toggleDebugMode() {
+        const currentMode = getDebugMode();
+        GM_setValue('debugMode', !currentMode);
+        alert(`调试模式已${!currentMode ? '开启 ✅' : '关闭 ❌'}`);
+    }
+
     // 注册菜单命令
     GM_registerMenuCommand('设置 Pixiv 文件夹 ID', setFolderId);
+    GM_registerMenuCommand('切换调试模式', toggleDebugMode);
+
+    // 显示消息（根据调试模式决定是否显示）
+    function showMessage(message, forceShow = false) {
+        if (getDebugMode() || forceShow) {
+            alert(message);
+        }
+    }
 
     // 检查Eagle是否运行
     async function checkEagle() {
@@ -276,13 +296,13 @@
             // 首先检查Eagle是否运行
             const eagleStatus = await checkEagle();
             if (!eagleStatus.running) {
-                alert(`${folderInfo}\nEagle 未启动，请先启动 Eagle 应用`);
+                showMessage(`${folderInfo}\nEagle 未启动，请先启动 Eagle 应用！`, true);
                 return;
             }
 
             const artworkId = getArtworkId();
             if (!artworkId) {
-                alert('无法获取作品ID');
+                showMessage('无法获取作品 ID', true);
                 return;
             }
 
@@ -313,9 +333,9 @@
                     ...details.originalUrls.map((url, index) => `[${index + 1}] ${url}`)
                 ].join('\n');
 
-                alert(message);
+                showMessage(message);
             } catch (error) {
-                alert(`${folderInfo}\n获取作品信息失败`);
+                showMessage(`${folderInfo}\n获取作品信息失败`, true);
             }
         });
         
