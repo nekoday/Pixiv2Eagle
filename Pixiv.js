@@ -50,6 +50,59 @@
         }
     }
 
+    // 递归查找文件夹
+    function findFolderRecursively(folders, targetId) {
+        for (const folder of folders) {
+            if (folder.id === targetId) {
+                return folder;
+            }
+            if (folder.children && folder.children.length > 0) {
+                const found = findFolderRecursively(folder.children, targetId);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    // 获取画师专属文件夹信息
+    async function getArtistFolder(pixivFolderId, artistId) {
+        try {
+            // 获取所有文件夹列表
+            const response = await fetch('http://localhost:41595/api/folder/list');
+            const data = await response.json();
+            
+            if (!data.status || !Array.isArray(data.data)) {
+                throw new Error('无法获取文件夹列表');
+            }
+
+            // 递归查找 Pixiv 主文件夹
+            const pixivFolder = findFolderRecursively(data.data, pixivFolderId);
+            if (!pixivFolder || !Array.isArray(pixivFolder.children)) {
+                throw new Error('无法找到 Pixiv 文件夹或其子文件夹');
+            }
+
+            // 在子文件夹中查找画师专属文件夹
+            const artistFolder = pixivFolder.children.find(folder => {
+                const description = folder.description || '';
+                const match = description.match(/pid\s*=\s*(\d+)/);
+                return match && match[1] === artistId;
+            });
+
+            return artistFolder ? {
+                exists: true,
+                id: artistFolder.id,
+                name: artistFolder.name
+            } : {
+                exists: false
+            };
+        } catch (error) {
+            console.error('获取画师文件夹信息失败:', error);
+            return { exists: false };
+        }
+    }
+
     // 等待目标section元素加载
     function waitForElement(selector) {
         return new Promise(resolve => {
@@ -235,8 +288,19 @@
 
             try {
                 const details = await getArtworkDetails(artworkId);
+                
+                // 检查画师专属文件夹
+                let artistFolderInfo = '未找到画师专属文件夹';
+                if (folderId) {
+                    const artistFolder = await getArtistFolder(folderId, details.userId);
+                    if (artistFolder.exists) {
+                        artistFolderInfo = `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`;
+                    }
+                }
+
                 const message = [
                     folderInfo,
+                    artistFolderInfo,
                     '----------------------------',
                     `Eagle版本: ${eagleStatus.version}`,
                     '----------------------------',
