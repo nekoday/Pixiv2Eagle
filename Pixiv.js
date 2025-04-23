@@ -5,7 +5,7 @@
 // @version      1.0
 // @description  一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @author       nekoday
-// @match        https://www.pixiv.net/artworks/*
+// @match        https://www.pixiv.net/*
 // @grant        GM_xmlhttpRequest
 // @grant        GM_getValue
 // @grant        GM_setValue
