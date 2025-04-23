@@ -41,7 +41,7 @@ SOFTWARE.
     'use strict';
 
     // 常量定义
-    const EAGLE_SAVE_BUTTON_ID = 'eagle-save-button';
+    const EAGLE_SAVE_BUTTON_ID = 'eagle-save-button-wrapper';
 
     // 获取文件夹ID
     function getFolderId() {
@@ -276,11 +276,10 @@ SOFTWARE.
         });
     }
 
-    // 创建Pixiv风格的按钮
+    // 创建 Pixiv 风格的按钮
     function createPixivStyledButton(text) {
         const button = document.createElement('div');
         button.textContent = text;
-        button.id = EAGLE_SAVE_BUTTON_ID;
         button.style.cursor = 'pointer';
         button.style.fontSize = '14px';
         button.style.padding = '8px 16px';
@@ -552,12 +551,9 @@ SOFTWARE.
     // 主函数
     async function addButton() {
         // 移除旧按钮（如果存在）
-        const oldButton = document.getElementById(EAGLE_SAVE_BUTTON_ID);
-        if (oldButton) {
-            const wrapper = oldButton.closest('div[class*="sc-a74b10e0-"]');
-            if (wrapper) {
-                wrapper.remove();
-            }
+        const oldWrapper = document.getElementById(EAGLE_SAVE_BUTTON_ID);
+        if (oldWrapper) {
+            oldWrapper.remove();
         }
 
         // 等待目标section加载
@@ -573,6 +569,7 @@ SOFTWARE.
         
         // 创建包裹div
         const buttonWrapper = document.createElement('div');
+        buttonWrapper.id = EAGLE_SAVE_BUTTON_ID;
         buttonWrapper.className = lastDiv.className;
         buttonWrapper.style.display = 'flex';
         buttonWrapper.style.alignItems = 'center';
