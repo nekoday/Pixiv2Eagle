@@ -42,6 +42,7 @@ SOFTWARE.
 
     // 常量定义
     const EAGLE_SAVE_BUTTON_ID = 'eagle-save-button-wrapper';
+    const PIXIV_SECTION_CLASS = 'sc-a74b10e0-0';
 
     // 获取文件夹ID
     function getFolderId() {
@@ -206,7 +207,7 @@ SOFTWARE.
         // 设置一个观察器来监视DOM变化
         const observer = new MutationObserver((mutations, obs) => {
             // 检查目标section是否存在
-            const targetSection = document.querySelector('section[class*="sc-a74b10e0-0"]');
+            const targetSection = document.querySelector(`section[class*="${PIXIV_SECTION_CLASS}"]`);
             if (targetSection) {
                 // 如果section存在但没有我们的按钮，添加按钮
                 const button = document.getElementById(EAGLE_SAVE_BUTTON_ID);
@@ -230,7 +231,7 @@ SOFTWARE.
         // 同时设置一个间隔检查
         let checkCount = 0;
         const intervalId = setInterval(() => {
-            const targetSection = document.querySelector('section[class*="sc-a74b10e0-0"]');
+            const targetSection = document.querySelector(`section[class*="${PIXIV_SECTION_CLASS}"]`);
             if (targetSection) {
                 const button = document.getElementById(EAGLE_SAVE_BUTTON_ID);
                 if (!button) {
@@ -556,7 +557,7 @@ SOFTWARE.
         }
 
         // 等待目标section加载
-        const targetSection = await waitForElement('section[class*="sc-a74b10e0-0"]');
+        const targetSection = await waitForElement(`section[class*="${PIXIV_SECTION_CLASS}"]`);
         if (!targetSection) return;  // 如果找不到目标section，直接返回
         
         // 检查按钮是否已经存在（双重检查，以防在等待过程中已添加）
