@@ -68,6 +68,18 @@ SOFTWARE.
         }
     }
 
+    // 获取是否使用投稿时间
+    function getUseUploadDate() {
+        return GM_getValue('useUploadDate', false);
+    }
+
+    // 切换是否使用投稿时间
+    function toggleUseUploadDate() {
+        const currentMode = getUseUploadDate();
+        GM_setValue('useUploadDate', !currentMode);
+        alert(`使用投稿时间作为添加日期已${!currentMode ? '开启 ✅' : '关闭 ❌'}`);
+    }
+
     // 获取调试模式状态
     function getDebugMode() {
         return GM_getValue('debugMode', false);
@@ -82,7 +94,8 @@ SOFTWARE.
 
     // 注册菜单命令
     GM_registerMenuCommand('设置 Pixiv 文件夹 ID', setFolderId);
-    GM_registerMenuCommand('切换调试模式', toggleDebugMode);
+    GM_registerMenuCommand('切换：调试模式', toggleDebugMode);
+    GM_registerMenuCommand('切换：使用投稿时间作为添加日期', toggleUseUploadDate);
     GM_registerMenuCommand('保存当前作品到 Eagle', saveCurrentArtwork);
 
     // 显示消息（根据调试模式决定是否显示）
@@ -403,6 +416,7 @@ SOFTWARE.
                 illustTitle: basicInfo.body.illustTitle,
                 pageCount: pagesInfo.pageCount,
                 originalUrls: pagesInfo.originalUrls,
+                uploadDate: basicInfo.body.uploadDate,
                 tags: processTags(basicInfo.body.tags.tags, basicInfo.body.isOriginal, basicInfo.body.aiType)
             };
 
@@ -420,6 +434,10 @@ SOFTWARE.
             const isMultiPage = imageUrls.length > 1;
             const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
             
+            // 根据设置决定是否使用投稿时间
+            const useUploadDate = getUseUploadDate();
+            const modificationTime = useUploadDate ? new Date(details.uploadDate).getTime() : undefined;
+            
             // 批量添加图片
             const data = await gmFetch('http://localhost:41595/api/item/addFromURLs', {
                 method: 'POST',
@@ -432,6 +450,7 @@ SOFTWARE.
                         name: isMultiPage ? `${baseTitle}_${index}` : baseTitle,
                         website: artworkUrl,
                         tags: details.tags,
+                        ...(modificationTime && { modificationTime: modificationTime }),
                         headers: {
                             "referer": "https://www.pixiv.net/"
                         },
@@ -566,6 +585,7 @@ SOFTWARE.
                 `作者: ${details.userName} (ID: ${details.userId})`,
                 `作品名称: ${details.illustTitle}`,
                 `页数: ${details.pageCount}`,
+                `上传时间: ${details.uploadDate}`,
                 `标签: ${details.tags.join(', ')}`,
                 '----------------------------',
                 '✅ 图片已成功保存到 Eagle'
