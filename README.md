@@ -23,7 +23,7 @@
 1. 启动 Eagle 软件
 2. 在 Eagle 中创建一个用于存储 Pixiv 作品的文件夹
 3. 在 Eagle 中右键点击该文件夹，选择「复制链接」
-4. 从复制的链接中提取文件夹 ID（链接格式为：http://localhost:41595/folder?id=XXXXXX）
+4. 从复制的链接中提取文件夹 ID（链接格式为：`http://localhost:41595/folder?id=XXXXXX`）
 5. 在 Pixiv 作品页面，点击 Tampermonkey 图标
 6. 选择「设置 Pixiv 文件夹 ID」，粘贴提取的文件夹 ID（XXXXXX 部分）
 7. 点击「确定」保存设置
@@ -38,7 +38,7 @@
 
 ### 日常使用
 1. 确保 Eagle 软件已启动
-2. 访问任意 Pixiv 作品页面（/artworks/xxxxx）
+2. 访问任意 Pixiv 作品页面（`/artworks/xxxxx`）
 3. 点击页面上的「保存到 Eagle」按钮即可将作品保存到指定文件夹
 
 ## 功能说明
@@ -69,7 +69,7 @@
 
 1. 使用前请确保 Eagle 软件已启动
 2. 需要正确配置 Pixiv 文件夹 ID
-3. 保存大文件或多个文件时可能需要等待一段时间，这取决于您设备所处网络环境
+3. 保存大文件或多页作品时可能需要较长时间，请耐心等待，下载速度主要取决于您的网络环境和 Pixiv 服务器响应速度
 4. 请遵守 Pixiv 的使用条款和版权规定
 
 ## 常见问题
@@ -81,7 +81,7 @@ A: 请确保：
 - 页面能够完全加载
 
 ### Q: 如何获取文件夹 ID？
-A: 在 Eagle 中右键点击目标文件夹，选择「复制链接」，从链接中提取 ID 部分（格式为：http://localhost:41595/folder?id=XXXXXX）
+A: 在 Eagle 中右键点击目标文件夹，选择「复制链接」，从链接中提取 ID 部分（链接格式为：`http://localhost:41595/folder?id=XXXXXX`）
 
 ### Q: 保存失败怎么办？
 A: 请检查：
