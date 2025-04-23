@@ -283,7 +283,6 @@ SOFTWARE.
         button.style.cursor = 'pointer';
         button.style.fontSize = '14px';
         button.style.padding = '8px 16px';
-        button.style.marginRight = '1em';
         button.style.borderRadius = '999px';
         button.style.color = '#333';
         button.style.backgroundColor = 'transparent';
@@ -563,8 +562,8 @@ SOFTWARE.
         // 检查按钮是否已经存在（双重检查，以防在等待过程中已添加）
         if (document.getElementById(EAGLE_SAVE_BUTTON_ID)) return;
 
-        // 找到section中最后一个div的类名作为参考
-        const lastDiv = targetSection.querySelector('div[class*="sc-a74b10e0-"]');
+        // 找到section中最后一个div作为参考
+        const lastDiv = targetSection.querySelector('div:last-of-type');
         if (!lastDiv) return;
         
         // 创建包裹div
