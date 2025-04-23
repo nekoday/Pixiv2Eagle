@@ -73,6 +73,7 @@ SOFTWARE.
     // 注册菜单命令
     GM_registerMenuCommand('设置 Pixiv 文件夹 ID', setFolderId);
     GM_registerMenuCommand('切换调试模式', toggleDebugMode);
+    GM_registerMenuCommand('保存当前作品到 Eagle', saveCurrentArtwork);
 
     // 显示消息（根据调试模式决定是否显示）
     function showMessage(message, forceShow = false) {
@@ -486,6 +487,68 @@ SOFTWARE.
         }
     }
 
+    // 保存当前作品到Eagle
+    async function saveCurrentArtwork() {
+        const folderId = getFolderId();
+        const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : '未设置 Pixiv 文件夹 ID';
+
+        // 首先检查Eagle是否运行
+        const eagleStatus = await checkEagle();
+        if (!eagleStatus.running) {
+            showMessage(`${folderInfo}\nEagle 未启动，请先启动 Eagle 应用！`, true);
+            return;
+        }
+
+        const artworkId = getArtworkId();
+        if (!artworkId) {
+            showMessage('无法获取作品 ID', true);
+            return;
+        }
+
+        try {
+            const details = await getArtworkDetails(artworkId);
+            
+            // 检查或创建画师专属文件夹
+            let artistFolder = null;
+            if (folderId) {
+                const existingFolder = await getArtistFolder(folderId, details.userId);
+                if (existingFolder.exists) {
+                    artistFolder = existingFolder;
+                } else {
+                    // 创建新的画师文件夹
+                    artistFolder = await createArtistFolder(folderId, details.userName, details.userId);
+                }
+            }
+
+            if (!artistFolder) {
+                throw new Error('无法获取或创建画师文件夹');
+            }
+
+            // 保存图片到Eagle
+            await saveToEagle(details.originalUrls, artistFolder.id, details, artworkId);
+            
+            const message = [
+                folderInfo,
+                `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`,
+                '----------------------------',
+                `Eagle版本: ${eagleStatus.version}`,
+                '----------------------------',
+                `作品ID: ${artworkId}`,
+                `作者: ${details.userName} (ID: ${details.userId})`,
+                `作品名称: ${details.illustTitle}`,
+                `页数: ${details.pageCount}`,
+                `标签: ${details.tags.join(', ')}`,
+                '----------------------------',
+                '✅ 图片已成功保存到 Eagle'
+            ].join('\n');
+
+            showMessage(message);
+        } catch (error) {
+            console.error(error);
+            showMessage(`${folderInfo}\n保存图片失败: ${error.message}`, true);
+        }
+    }
+
     // 主函数
     async function addButton() {
         // 移除旧按钮（如果存在）
@@ -519,66 +582,7 @@ SOFTWARE.
         const button = createPixivStyledButton('保存到 Eagle');
         
         // 添加点击事件
-        button.addEventListener('click', async () => {
-            const folderId = getFolderId();
-            const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : '未设置 Pixiv 文件夹 ID';
-
-            // 首先检查Eagle是否运行
-            const eagleStatus = await checkEagle();
-            if (!eagleStatus.running) {
-                showMessage(`${folderInfo}\nEagle 未启动，请先启动 Eagle 应用！`, true);
-                return;
-            }
-
-            const artworkId = getArtworkId();
-            if (!artworkId) {
-                showMessage('无法获取作品 ID', true);
-                return;
-            }
-
-            try {
-                const details = await getArtworkDetails(artworkId);
-                
-                // 检查或创建画师专属文件夹
-                let artistFolder = null;
-                if (folderId) {
-                    const existingFolder = await getArtistFolder(folderId, details.userId);
-                    if (existingFolder.exists) {
-                        artistFolder = existingFolder;
-                    } else {
-                        // 创建新的画师文件夹
-                        artistFolder = await createArtistFolder(folderId, details.userName, details.userId);
-                    }
-                }
-
-                if (!artistFolder) {
-                    throw new Error('无法获取或创建画师文件夹');
-                }
-
-                // 保存图片到Eagle
-                await saveToEagle(details.originalUrls, artistFolder.id, details, artworkId);
-                
-                const message = [
-                    folderInfo,
-                    `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`,
-                    '----------------------------',
-                    `Eagle版本: ${eagleStatus.version}`,
-                    '----------------------------',
-                    `作品ID: ${artworkId}`,
-                    `作者: ${details.userName} (ID: ${details.userId})`,
-                    `作品名称: ${details.illustTitle}`,
-                    `页数: ${details.pageCount}`,
-                    `标签: ${details.tags.join(', ')}`,
-                    '----------------------------',
-                    '✅ 图片已成功保存到 Eagle'
-                ].join('\n');
-
-                showMessage(message);
-            } catch (error) {
-                console.error(error);
-                showMessage(`${folderInfo}\n保存图片失败: ${error.message}`, true);
-            }
-        });
+        button.addEventListener('click', saveCurrentArtwork);
         
         // 将按钮添加到包裹div中
         buttonWrapper.appendChild(button);
