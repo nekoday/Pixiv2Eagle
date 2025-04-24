@@ -1,13 +1,14 @@
 // ==UserScript==
 // @name         Pixiv2Eagle
 // @description  一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
+// @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
 // @version      1.0
 
-// @author         nekoday
-// @namespace      https://github.com/nekoday/Pixiv2Eagle
-// @homepage       https://github.com/nekoday/Pixiv2Eagle
-// @icon           https://www.pixiv.net/favicon.ico
-// @license        MIT License
+// @author       nekoday
+// @namespace    https://github.com/nekoday/Pixiv2Eagle
+// @homepage     https://github.com/nekoday/Pixiv2Eagle
+// @icon         https://www.pixiv.net/favicon.ico
+// @license      MIT License
 
 // @match        https://www.pixiv.net/*
 
@@ -234,7 +235,7 @@ SOFTWARE.
             // 检查目标section是否存在
             const targetSection = document.querySelector(`section[class*="${PIXIV_SECTION_CLASS}"]`);
             if (targetSection) {
-                // 如果section存在但没有我们的按钮，添加按钮
+                // 检查section中是否存在保存按钮，若不存在则添加
                 const button = document.getElementById(EAGLE_SAVE_BUTTON_ID);
                 if (!button) {
                     addButton();
