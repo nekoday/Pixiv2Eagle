@@ -6,17 +6,17 @@ on:
       - 'v*'
 
 jobs:
-  build:
+  auto-tag-release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Create Release
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
           files: Pixiv.js
           draft: false
           prerelease: false
-          generate_release_notes: true 
+          generate_release_notes: true
