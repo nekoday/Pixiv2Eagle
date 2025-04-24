@@ -358,24 +358,42 @@ SOFTWARE.
     function processTags(tags, isOriginal, aiType) {
         if (!Array.isArray(tags)) return [];
         
-        const processedTags = tags.flatMap(tagInfo => {
-            const tags = [tagInfo.tag];
-            // 如果有翻译且有英文翻译，添加英文翻译作为额外的标签
-            if (tagInfo.translation && tagInfo.translation.en) {
-                tags.push(tagInfo.translation.en);
+        // 初始化结果数组和标签集合
+        const processedTags = [];
+        const tagSet = new Set();
+        
+        // 定义添加标签的辅助函数
+        const addTagIfNotExists = (tag) => {
+            if (!tagSet.has(tag)) {
+                tagSet.add(tag);
+                processedTags.push(tag);
+                return true;
             }
-            return tags;
-        });
-
-        // 如果是原创作品，在标签列表开头添加"原创"标签
-        if (isOriginal) {
-            processedTags.unshift('原创');
-        }
-
-        // 如果是AI生成的作品，在标签列表开头添加"AI生成"标签
+            return false;
+        };
+        
+        // 首先添加特殊标签（如果需要）
+        // 如果是 AI 生成的作品，添加"AI生成"标签
         if (aiType === 2) {
-            processedTags.unshift('AI生成');
+            addTagIfNotExists('AI生成');
         }
+        
+        // 如果是原创作品，添加"原创"标签
+        if (isOriginal) {
+            addTagIfNotExists('原创');
+        }
+        
+        // 处理原始标签，保持顺序但去除重复
+        tags.forEach(tagInfo => {
+            const tag = tagInfo.tag;
+            addTagIfNotExists(tag);
+            
+            // 如果有翻译且有英文翻译，将其作为单独的标签处理
+            if (tagInfo.translation && tagInfo.translation.en) {
+                const enTag = tagInfo.translation.en;
+                addTagIfNotExists(enTag);
+            }
+        });
 
         return processedTags;
     }
