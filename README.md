@@ -1,6 +1,6 @@
 # Pixiv2Eagle
 
-一个用于将 Pixiv 艺术作品保存到 Eagle 图片管理软件的 Tampermonkey 脚本。
+一个用于将 Pixiv 艺术作品保存到 Eagle 图片管理软件的 Tampermonkey（油猴）脚本。
 
 ## 功能特点
 
@@ -24,10 +24,9 @@
 1. 启动 Eagle 软件
 2. 在 Eagle 中创建一个用于存储 Pixiv 作品的文件夹
 3. 在 Eagle 中右键点击该文件夹，选择「复制链接」
-4. 从复制的链接中提取文件夹 ID（链接格式为：`http://localhost:41595/folder?id=XXXXXX`）
-5. 在 Pixiv 作品页面，点击 Tampermonkey 图标
-6. 选择「设置 Pixiv 文件夹 ID」，粘贴提取的文件夹 ID（XXXXXX 部分）
-7. 点击「确定」保存设置
+4. 在 Pixiv 作品页面，点击 Tampermonkey 图标
+5. 选择「设置 Pixiv 文件夹 ID」，粘贴复制的文件夹链接（例如 `http://localhost:41595/folder?id=XXXXXX`）或直接输入文件夹 ID（`XXXXXX` 部分）
+6. 点击「确定」保存设置
 
 ### 文件夹 ID 设置规则
 - 如果设置了 Pixiv 文件夹 ID：
@@ -100,7 +99,7 @@ A: 请检查：
 - 开启调试模式查看详细信息
 - 查看浏览器控制台是否有报错信息
 
-如果按以上步骤检查后仍未解决问题，欢迎在 GitHub 提交 issue。
+如果按以上步骤检查后仍未解决问题，欢迎在 [GitHub](https://github.com/nekoday/Pixiv2Eagle) 提交 issue。
 
 ## 免责声明
 

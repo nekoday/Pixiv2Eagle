@@ -50,23 +50,45 @@ SOFTWARE.
     const EAGLE_SAVE_BUTTON_ID = 'eagle-save-button-wrapper';
     const PIXIV_SECTION_CLASS = 'sc-a74b10e0-0';
 
-    // 获取文件夹ID
+    // 获取文件夹 ID
     function getFolderId() {
         return GM_getValue('pixivFolderId', '');
     }
 
-    // 设置文件夹ID
+    // 设置文件夹 ID
     function setFolderId() {
         const currentId = getFolderId();
-        const newId = prompt('请输入 Pixiv 文件夹 ID:', currentId);
-        if (newId !== null) {
-            const trimmedId = newId.trim();
-            GM_setValue('pixivFolderId', trimmedId);
-            if (trimmedId === '') {
-                alert('已清空文件夹 ID，将默认在根目录创建画师文件夹');
-            } else {
-                alert(`文件夹 ID 已设置为: ${trimmedId}`);
+        const userInput = prompt('请输入 Pixiv 文件夹 ID 或 Eagle 文件夹链接:', currentId);
+
+        if (userInput === null) return;
+        
+        let finalId = userInput.trim();
+        const urlParam = 'folder?id=';
+        const urlIndex = finalId.indexOf(urlParam);
+
+        if (urlIndex !== -1) {
+            // 如果输入的是链接，提取 ID
+            finalId = finalId.substring(urlIndex + urlParam.length);
+            // 移除可能的后续参数（虽然 Eagle 链接通常没有）
+            const queryParamIndex = finalId.indexOf('?');
+            if (queryParamIndex !== -1) {
+                finalId = finalId.substring(0, queryParamIndex);
             }
+            const hashIndex = finalId.indexOf('#');
+                if (hashIndex !== -1) {
+                finalId = finalId.substring(0, hashIndex);
+            }
+        }
+
+        // 再次 trim 以防万一
+        finalId = finalId.trim();
+
+        GM_setValue('pixivFolderId', finalId);
+
+        if (finalId === '') {
+            alert('已清空文件夹 ID，将默认在根目录创建画师文件夹');
+        } else {
+            alert(`文件夹 ID 已设置为: ${finalId}`);
         }
     }
 

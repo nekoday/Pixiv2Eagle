@@ -24,10 +24,9 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
 1. Launch Eagle software
 2. Create a folder in Eagle for storing Pixiv artworks
 3. Right-click on the folder in Eagle and select "Copy Link"
-4. Extract the folder ID from the copied link (link format: `http://localhost:41595/folder?id=XXXXXX`)
-5. On a Pixiv artwork page, click the Tampermonkey icon
-6. Select "Set Pixiv Folder ID" and paste the extracted folder ID (the XXXXXX part)
-7. Click "OK" to save the settings
+4. On a Pixiv artwork page, click the Tampermonkey icon
+5. Select "Set Pixiv Folder ID" and paste the copied folder link (e.g., `http://localhost:41595/folder?id=XXXXXX`) or just the folder ID (`XXXXXX` part)
+6. Click "OK" to save the settings
 
 ### Daily Use
 1. Make sure Eagle software is running
@@ -100,7 +99,7 @@ A: Please check:
 - Enable debug mode to view detailed information
 - Check the browser console for error messages
 
-If the problem persists after checking the above steps, feel free to submit an issue on GitHub.
+If the problem persists after checking the above steps, feel free to submit an issue on [GitHub](https://github.com/nekoday/Pixiv2Eagle).
 
 ## Disclaimer
 
