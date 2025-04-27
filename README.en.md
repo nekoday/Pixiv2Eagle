@@ -8,6 +8,7 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
 - 📁 Automatically create artist-specific folders
 - 🏷️ Preserve artwork tags and metadata
 - 📄 Support for multi-page artwork saving
+- 📝 Option to save artwork description to Eagle annotation
 - 🔧 Configurable Pixiv folder ID
 - 🐛 Debug mode support
 - ⏰ Option to use artwork upload time as the addition date

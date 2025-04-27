@@ -104,6 +104,18 @@ SOFTWARE.
         alert(`使用投稿时间作为添加日期已${!currentMode ? '开启 ✅' : '关闭 ❌'}`);
     }
 
+    // 获取是否保存作品描述
+    function getSaveDescription() {
+        return GM_getValue('saveDescription', true); // 默认开启
+    }
+
+    // 切换是否保存作品描述
+    function toggleSaveDescription() {
+        const currentMode = getSaveDescription();
+        GM_setValue('saveDescription', !currentMode);
+        alert(`保存作品描述已${!currentMode ? '开启 ✅' : '关闭 ❌'}`);
+    }
+
     // 获取调试模式状态
     function getDebugMode() {
         return GM_getValue('debugMode', false);
@@ -120,6 +132,7 @@ SOFTWARE.
     GM_registerMenuCommand('设置 Pixiv 文件夹 ID', setFolderId);
     GM_registerMenuCommand('切换：调试模式', toggleDebugMode);
     GM_registerMenuCommand('切换：使用投稿时间作为添加日期', toggleUseUploadDate);
+    GM_registerMenuCommand('切换：保存作品描述', toggleSaveDescription); // 新增命令
     GM_registerMenuCommand('保存当前作品到 Eagle', saveCurrentArtwork);
 
     // 显示消息（根据调试模式决定是否显示）
@@ -456,6 +469,7 @@ SOFTWARE.
                 userName: basicInfo.body.userName,
                 userId: basicInfo.body.userId,
                 illustTitle: basicInfo.body.illustTitle,
+                description: basicInfo.body.description,
                 pageCount: pagesInfo.pageCount,
                 originalUrls: pagesInfo.originalUrls,
                 uploadDate: basicInfo.body.uploadDate,
@@ -469,17 +483,21 @@ SOFTWARE.
         }
     }
 
-    // 保存图片到Eagle
+    // 保存图片到 Eagle
     async function saveToEagle(imageUrls, folderId, details, artworkId) {
         try {
             const baseTitle = details.illustTitle;
             const isMultiPage = imageUrls.length > 1;
             const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
-            
+
             // 根据设置决定是否使用投稿时间
             const useUploadDate = getUseUploadDate();
             const modificationTime = useUploadDate ? new Date(details.uploadDate).getTime() : undefined;
-            
+
+            // 根据设置决定是否保存描述
+            const shouldSaveDescription = getSaveDescription();
+            const annotation = shouldSaveDescription ? details.description : undefined;
+
             // 批量添加图片
             const data = await gmFetch('http://localhost:41595/api/item/addFromURLs', {
                 method: 'POST',
@@ -492,6 +510,7 @@ SOFTWARE.
                         name: isMultiPage ? `${baseTitle}_${index}` : baseTitle,
                         website: artworkUrl,
                         tags: details.tags,
+                        ...(annotation && { annotation: annotation }), // 添加 annotation 字段
                         ...(modificationTime && { modificationTime: modificationTime }),
                         headers: {
                             "referer": "https://www.pixiv.net/"
