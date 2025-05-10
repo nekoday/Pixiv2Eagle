@@ -161,7 +161,7 @@ SOFTWARE.
         });
     }
 
-    // 检查Eagle是否运行
+    // 检查 Eagle 是否运行
     async function checkEagle() {
         try {
             const data = await gmFetch('http://localhost:41595/api/application/info');
@@ -194,46 +194,143 @@ SOFTWARE.
         return null;
     }
 
-    // 获取画师专属文件夹信息
-    async function getArtistFolder(pixivFolderId, artistId, artistName) {
+    // 在文件夹中查找画师文件夹（通过画师 ID）
+    function findArtistFolderInFolder(folder, artistId) {
+        if (!folder || !folder.children) return null;
+        
+        const artistFolder = folder.children.find(childFolder => {
+            const description = childFolder.description || '';
+            const match = description.match(/pid\s*=\s*(\d+)/);
+            return match && match[1] === artistId;
+        });
+        
+        if (artistFolder) {
+            return {
+                exists: true,
+                id: artistFolder.id,
+                name: artistFolder.name
+            };
+        }
+        return null;
+    }
+
+    // 在根目录查找画师文件夹
+    async function findArtistFolderInRoot(artistId) {
         try {
-            // 获取所有文件夹列表
-            const data = await gmFetch('http://localhost:41595/api/folder/list');
+            const rootFolders = await gmFetch('http://localhost:41595/api/folder/list');
+            if (!rootFolders.status || !Array.isArray(rootFolders.data)) {
+                throw new Error('无法获取根目录文件夹列表');
+            }
             
-            if (!data.status || !Array.isArray(data.data)) {
-                throw new Error('无法获取文件夹列表');
-            }
-
-            // 递归查找 Pixiv 主文件夹
-            const pixivFolder = findFolderRecursively(data.data, pixivFolderId);
-            if (!pixivFolder) {
-                throw new Error('找不到指定的 Pixiv 文件夹，请检查文件夹 ID 是否正确');
-            }
-
-            // 在 Pixiv 文件夹的子文件夹中查找画师专属文件夹
-            const artistFolder = pixivFolder.children?.find(folder => {
+            const existingFolder = rootFolders.data.find(folder => {
                 const description = folder.description || '';
                 const match = description.match(/pid\s*=\s*(\d+)/);
                 return match && match[1] === artistId;
             });
-
-            if (artistFolder) {
+            
+            if (existingFolder) {
                 return {
                     exists: true,
-                    id: artistFolder.id,
-                    name: artistFolder.name
+                    id: existingFolder.id,
+                    name: existingFolder.name
                 };
             }
-
-            // 如果找不到画师文件夹，创建新的画师文件夹
-            return await createArtistFolder(artistName, artistId, pixivFolderId);
+            return null;
         } catch (error) {
-            console.error('获取画师文件夹信息失败:', error);
+            console.error('在根目录查找画师文件夹失败:', error);
             throw error;
         }
     }
 
-    // 监听URL变化
+    // 在指定的 Pixiv 文件夹中查找画师文件夹
+    async function findArtistFolderInPixivFolder(pixivFolderId, artistId) {
+        try {
+            // 获取所有文件夹列表
+            const data = await gmFetch('http://localhost:41595/api/folder/list');
+            if (!data.status || !Array.isArray(data.data)) {
+                throw new Error('无法获取文件夹列表');
+            }
+            
+            // 递归查找 Pixiv 主文件夹
+            const pixivFolder = findFolderRecursively(data.data, pixivFolderId);
+            if (!pixivFolder) {
+                throw new Error('找不到指定的 Pixiv 文件夹，请检查输入的文件夹 ID 是否正确');
+            }
+            
+            // 在 Pixiv 文件夹中查找画师文件夹
+            return findArtistFolderInFolder(pixivFolder, artistId);
+        } catch (error) {
+            console.error('在Pixiv文件夹中查找画师文件夹失败:', error);
+            throw error;
+        }
+    }
+
+    // 查找画师文件夹（不创建）
+    async function findArtistFolder(pixivFolderId, artistId) {
+        if (pixivFolderId) {
+            return await findArtistFolderInPixivFolder(pixivFolderId, artistId);
+        } else {
+            return await findArtistFolderInRoot(artistId);
+        }
+    }
+
+    // 创建画师专属文件夹
+    async function createArtistFolder(artistName, artistId, parentId = null) {
+        try {
+            // 创建画师文件夹
+            const createData = await gmFetch('http://localhost:41595/api/folder/create', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    folderName: artistName,
+                    ...(parentId && { parent: parentId })
+                })
+            });
+            
+            if (!createData.status) {
+                throw new Error('创建文件夹失败');
+            }
+
+            const newFolderId = createData.data.id;
+
+            // 更新文件夹描述
+            const updateData = await gmFetch('http://localhost:41595/api/folder/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    folderId: newFolderId,
+                    newDescription: `pid = ${artistId}`
+                })
+            });
+
+            if (!updateData.status) {
+                throw new Error('更新文件夹描述失败');
+            }
+            
+            return {
+                id: newFolderId,
+                name: artistName
+            };
+        } catch (error) {
+            console.error('创建画师文件夹失败:', error);
+            throw error;
+        }
+    }
+
+    // 查找或创建画师专属文件夹
+    async function getArtistFolder(pixivFolderId, artistId, artistName) {
+        // 先查找
+        const found = await findArtistFolder(pixivFolderId, artistId);
+        if (found) return found;
+        // 没找到则创建
+        return await createArtistFolder(artistName, artistId, pixivFolderId);
+    }
+
+    // 监听 URL 变化
     function observeUrlChanges() {
         // 监听 popstate 事件（后退/前进按钮触发）
         window.addEventListener('popstate', () => {
@@ -266,12 +363,12 @@ SOFTWARE.
         // 立即尝试添加按钮
         addButton();
 
-        // 设置一个观察器来监视DOM变化
+        // 设置一个观察器来监视 DOM 变化
         const observer = new MutationObserver((mutations, obs) => {
-            // 检查目标section是否存在
+            // 检查目标 section 是否存在
             const targetSection = document.querySelector(`section[class*="${PIXIV_SECTION_CLASS}"]`);
             if (targetSection) {
-                // 检查section中是否存在保存按钮，若不存在则添加
+                // 检查 section 中是否存在保存按钮，若不存在则添加
                 const button = document.getElementById(EAGLE_SAVE_BUTTON_ID);
                 if (!button) {
                     addButton();
@@ -308,7 +405,7 @@ SOFTWARE.
         }, 500);
     }
 
-    // 等待目标section元素加载
+    // 等待目标 section 元素加载
     function waitForElement(selector) {
         return new Promise(resolve => {
             // 首先检查元素是否已经存在
@@ -331,7 +428,7 @@ SOFTWARE.
                 subtree: true
             });
 
-            // 10秒后超时
+            // 10 秒后超时
             setTimeout(() => {
                 observer.disconnect();
                 resolve(null);
@@ -531,59 +628,12 @@ SOFTWARE.
         }
     }
 
-    // 创建画师专属文件夹
-    async function createArtistFolder(artistName, artistId, parentId = null) {
-        try {
-            // 创建画师文件夹
-            const createData = await gmFetch('http://localhost:41595/api/folder/create', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    folderName: artistName,
-                    ...(parentId && { parent: parentId })
-                })
-            });
-            
-            if (!createData.status) {
-                throw new Error('创建文件夹失败');
-            }
-
-            const newFolderId = createData.data.id;
-
-            // 更新文件夹描述
-            const updateData = await gmFetch('http://localhost:41595/api/folder/update', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    folderId: newFolderId,
-                    newDescription: `pid = ${artistId}`
-                })
-            });
-
-            if (!updateData.status) {
-                throw new Error('更新文件夹描述失败');
-            }
-            
-            return {
-                id: newFolderId,
-                name: artistName
-            };
-        } catch (error) {
-            console.error('创建画师文件夹失败:', error);
-            throw error;
-        }
-    }
-
-    // 保存当前作品到Eagle
+    // 保存当前作品到 Eagle
     async function saveCurrentArtwork() {
         const folderId = getFolderId();
         const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : '未设置 Pixiv 文件夹 ID';
 
-        // 首先检查Eagle是否运行
+        // 首先检查 Eagle 是否运行
         const eagleStatus = await checkEagle();
         if (!eagleStatus.running) {
             showMessage(`${folderInfo}\nEagle 未启动，请先启动 Eagle 应用！`, true);
@@ -600,38 +650,7 @@ SOFTWARE.
             const details = await getArtworkDetails(artworkId);
             
             // 检查或创建画师专属文件夹
-            let artistFolder = null;
-            if (folderId) {
-                // 如果设置了文件夹ID，检查文件夹是否存在并创建画师文件夹
-                artistFolder = await getArtistFolder(folderId, details.userId, details.userName);
-            } else {
-                // 如果未设置文件夹ID，在根目录创建画师文件夹
-                const rootFolders = await gmFetch('http://localhost:41595/api/folder/list');
-                if (!rootFolders.status || !Array.isArray(rootFolders.data)) {
-                    throw new Error('无法获取根目录文件夹列表');
-                }
-                
-                // 在根目录中查找画师专属文件夹
-                const existingFolder = rootFolders.data.find(folder => {
-                    const description = folder.description || '';
-                    const match = description.match(/pid\s*=\s*(\d+)/);
-                    return match && match[1] === details.userId;
-                });
-
-                if (existingFolder) {
-                    artistFolder = {
-                        id: existingFolder.id,
-                        name: existingFolder.name
-                    };
-                } else {
-                    // 在根目录创建新的画师文件夹
-                    artistFolder = await createArtistFolder(details.userName, details.userId);
-                }
-            }
-
-            if (!artistFolder) {
-                throw new Error('无法获取或创建画师文件夹');
-            }
+            const artistFolder = await getArtistFolder(folderId, details.userId, details.userName);
 
             // 保存图片到Eagle
             await saveToEagle(details.originalUrls, artistFolder.id, details, artworkId);
@@ -696,43 +715,10 @@ SOFTWARE.
         try {
             const folderId = getFolderId();
             
-            // 查找画师文件夹
-            let artistFolder = null;
+            // 只查找，不自动创建
+            const artistFolder = await findArtistFolder(folderId, userId);
             
-            if (folderId) {
-                // 如果设置了文件夹 ID，在指定文件夹中查找
-                try {
-                    artistFolder = await getArtistFolder(folderId, userId, userName);
-                } catch (error) {
-                    showMessage(`无法找到画师 ${userName} 的文件夹，请先保存作品创建文件夹。`, true);
-                    return;
-                }
-            } else {
-                // 如果未设置文件夹 ID，在根目录查找
-                const rootFolders = await gmFetch('http://localhost:41595/api/folder/list');
-                if (!rootFolders.status || !Array.isArray(rootFolders.data)) {
-                    throw new Error('无法获取根目录文件夹列表');
-                }
-                
-                // 在根目录中查找画师专属文件夹
-                const existingFolder = rootFolders.data.find(folder => {
-                    const description = folder.description || '';
-                    const match = description.match(/pid\s*=\s*(\d+)/);
-                    return match && match[1] === userId;
-                });
-
-                if (existingFolder) {
-                    artistFolder = {
-                        id: existingFolder.id,
-                        name: existingFolder.name
-                    };
-                } else {
-                    showMessage(`无法找到画师 ${userName} 的文件夹，请先保存作品创建文件夹。`, true);
-                    return;
-                }
-            }
-            
-            if (!artistFolder || !artistFolder.id) {
+            if (!artistFolder) {
                 showMessage(`无法找到画师 ${userName} 的文件夹，请先保存作品创建文件夹。`, true);
                 return;
             }
@@ -754,18 +740,18 @@ SOFTWARE.
             oldWrapper.remove();
         }
 
-        // 等待目标section加载
+        // 等待目标 section 加载
         const targetSection = await waitForElement(`section[class*="${PIXIV_SECTION_CLASS}"]`);
-        if (!targetSection) return;  // 如果找不到目标section，直接返回
+        if (!targetSection) return;  // 如果找不到目标 section，直接返回
         
         // 检查按钮是否已经存在（双重检查，以防在等待过程中已添加）
         if (document.getElementById(EAGLE_SAVE_BUTTON_ID)) return;
 
-        // 找到section中最后一个div作为参考
+        // 找到 section 中最后一个 div 作为参考
         const lastDiv = targetSection.querySelector('div:last-of-type');
         if (!lastDiv) return;
         
-        // 创建包裹div
+        // 创建包裹 div
         const buttonWrapper = document.createElement('div');
         buttonWrapper.id = EAGLE_SAVE_BUTTON_ID;
         buttonWrapper.className = lastDiv.className;
@@ -786,11 +772,11 @@ SOFTWARE.
         // 添加打开文件夹按钮点击事件
         openFolderButton.addEventListener('click', openArtistFolder);
         
-        // 将按钮添加到包裹div中
+        // 将按钮添加到包裹 div 中
         buttonWrapper.appendChild(openFolderButton);
         buttonWrapper.appendChild(saveButton);
         
-        // 将按钮添加到section的最后
+        // 将按钮添加到 section 的最后
         targetSection.appendChild(buttonWrapper);
     }
 
