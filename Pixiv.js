@@ -659,6 +659,93 @@ SOFTWARE.
         }
     }
 
+    // 通过 DOM 获取画师 UID 和用户名
+    function getArtistInfoFromDOM() {
+        // 选择器可能需要根据实际页面调整
+        const artistLink = document.querySelector('a.sc-dhKdcB.iGIMUH[data-gtm-value][href^="/users/"]');
+        if (artistLink) {
+            const userId = artistLink.getAttribute('data-gtm-value') || (artistLink.getAttribute('href').match(/\\d+/) || [])[0];
+            const userName = artistLink.textContent.trim();
+            if (userId && userName) {
+                return { userId, userName };
+            }
+        }
+        return null;
+    }
+
+    // 打开画师专属文件夹
+    async function openArtistFolder() {
+        // 首先检查 Eagle 是否运行
+        const eagleStatus = await checkEagle();
+        if (!eagleStatus.running) {
+            showMessage('Eagle 未启动，请先启动 Eagle 应用！', true);
+            return;
+        }
+
+        // 通过 DOM 获取画师信息
+        let artistInfo = getArtistInfoFromDOM();
+        let userId, userName;
+        if (artistInfo) {
+            userId = artistInfo.userId;
+            userName = artistInfo.userName;
+        } else {
+            showMessage('无法获取画师信息', true);
+            return;
+        }
+
+        try {
+            const folderId = getFolderId();
+            
+            // 查找画师文件夹
+            let artistFolder = null;
+            
+            if (folderId) {
+                // 如果设置了文件夹 ID，在指定文件夹中查找
+                try {
+                    artistFolder = await getArtistFolder(folderId, userId, userName);
+                } catch (error) {
+                    showMessage(`无法找到画师 ${userName} 的文件夹，请先保存作品创建文件夹。`, true);
+                    return;
+                }
+            } else {
+                // 如果未设置文件夹 ID，在根目录查找
+                const rootFolders = await gmFetch('http://localhost:41595/api/folder/list');
+                if (!rootFolders.status || !Array.isArray(rootFolders.data)) {
+                    throw new Error('无法获取根目录文件夹列表');
+                }
+                
+                // 在根目录中查找画师专属文件夹
+                const existingFolder = rootFolders.data.find(folder => {
+                    const description = folder.description || '';
+                    const match = description.match(/pid\s*=\s*(\d+)/);
+                    return match && match[1] === userId;
+                });
+
+                if (existingFolder) {
+                    artistFolder = {
+                        id: existingFolder.id,
+                        name: existingFolder.name
+                    };
+                } else {
+                    showMessage(`无法找到画师 ${userName} 的文件夹，请先保存作品创建文件夹。`, true);
+                    return;
+                }
+            }
+            
+            if (!artistFolder || !artistFolder.id) {
+                showMessage(`无法找到画师 ${userName} 的文件夹，请先保存作品创建文件夹。`, true);
+                return;
+            }
+            
+            // 打开画师文件夹
+            const eagleUrl = `http://localhost:41595/folder?id=${artistFolder.id}`;
+            window.open(eagleUrl, '_blank');
+        } catch (error) {
+            console.error(error);
+            showMessage(`打开画师文件夹失败: ${error.message}`, true);
+        }
+    }
+
     // 主函数
     async function addButton() {
         // 移除旧按钮（如果存在）
@@ -685,15 +772,23 @@ SOFTWARE.
         buttonWrapper.style.display = 'flex';
         buttonWrapper.style.alignItems = 'center';
         buttonWrapper.style.justifyContent = 'center';
+        buttonWrapper.style.gap = '8px'; // 添加按钮之间的间距
         
-        // 创建按钮
-        const button = createPixivStyledButton('保存到 Eagle');
+        // 创建保存按钮
+        const saveButton = createPixivStyledButton('保存到 Eagle');
         
-        // 添加点击事件
-        button.addEventListener('click', saveCurrentArtwork);
+        // 添加保存按钮点击事件
+        saveButton.addEventListener('click', saveCurrentArtwork);
+        
+        // 创建打开文件夹按钮
+        const openFolderButton = createPixivStyledButton('打开画师文件夹');
+        
+        // 添加打开文件夹按钮点击事件
+        openFolderButton.addEventListener('click', openArtistFolder);
         
         // 将按钮添加到包裹div中
-        buttonWrapper.appendChild(button);
+        buttonWrapper.appendChild(openFolderButton);
+        buttonWrapper.appendChild(saveButton);
         
         // 将按钮添加到section的最后
         targetSection.appendChild(buttonWrapper);
