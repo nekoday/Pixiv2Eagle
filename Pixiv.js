@@ -49,6 +49,7 @@ SOFTWARE.
     // 常量定义
     const EAGLE_SAVE_BUTTON_ID = 'eagle-save-button-wrapper';
     const PIXIV_SECTION_CLASS = 'sc-a74b10e0-0';
+    const PIXIV_ARTIST_DIV_CLASS = 'sc-d91e2d15-1 iiAAJk';
 
     // 获取文件夹 ID
     function getFolderId() {
@@ -680,13 +681,16 @@ SOFTWARE.
 
     // 通过 DOM 获取画师 UID 和用户名
     function getArtistInfoFromDOM() {
-        // 选择器可能需要根据实际页面调整
-        const artistLink = document.querySelector('a.sc-dhKdcB.iGIMUH[data-gtm-value][href^="/users/"]');
-        if (artistLink) {
-            const userId = artistLink.getAttribute('data-gtm-value') || (artistLink.getAttribute('href').match(/\\d+/) || [])[0];
-            const userName = artistLink.textContent.trim();
-            if (userId && userName) {
-                return { userId, userName };
+        // 通过 div 的 class 查找画师信息
+        const artistDiv = document.querySelector(`div.${PIXIV_ARTIST_DIV_CLASS.replace(/ /g, '.')}`);
+        if (artistDiv) {
+            const link = artistDiv.querySelector('a[href^="/users/"]');
+            if (link) {
+                const userId = link.getAttribute('data-gtm-value') || (link.getAttribute('href').match(/\d+/) || [])[0];
+                const userName = link.textContent.trim();
+                if (userId && userName) {
+                    return { userId, userName };
+                }
             }
         }
         return null;
