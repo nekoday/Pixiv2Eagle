@@ -696,8 +696,25 @@ SOFTWARE.
         return null;
     }
 
-    // 打开画师专属文件夹
-    async function openArtistFolder() {
+    // 在 Eagle 中打开画师专属文件夹
+    async function openArtistFolderInEagle(userId) {
+        const folderId = getFolderId();
+
+        // 只查找，不自动创建
+        const artistFolder = await findArtistFolder(folderId, userId);
+
+        if (!artistFolder) {
+            showMessage(`无法找到画师文件夹，请先保存作品创建文件夹。`, true);
+            return;
+        }
+
+        // 打开画师文件夹
+        const eagleUrl = `http://localhost:41595/folder?id=${artistFolder.id}`;
+        window.open(eagleUrl, '_blank');
+    }
+
+    // 从作品页打开画师专属文件夹
+    async function openArtistFolderFromArtworkPage() {
         // 首先检查 Eagle 是否运行
         const eagleStatus = await checkEagle();
         if (!eagleStatus.running) {
@@ -717,19 +734,7 @@ SOFTWARE.
         }
 
         try {
-            const folderId = getFolderId();
-            
-            // 只查找，不自动创建
-            const artistFolder = await findArtistFolder(folderId, userId);
-            
-            if (!artistFolder) {
-                showMessage(`无法找到画师 ${userName} 的文件夹，请先保存作品创建文件夹。`, true);
-                return;
-            }
-            
-            // 打开画师文件夹
-            const eagleUrl = `http://localhost:41595/folder?id=${artistFolder.id}`;
-            window.open(eagleUrl, '_blank');
+            await openArtistFolderInEagle(userId);
         } catch (error) {
             console.error(error);
             showMessage(`打开画师文件夹失败: ${error.message}`, true);
@@ -774,7 +779,7 @@ SOFTWARE.
         const openFolderButton = createPixivStyledButton('打开画师文件夹');
         
         // 添加打开文件夹按钮点击事件
-        openFolderButton.addEventListener('click', openArtistFolder);
+        openFolderButton.addEventListener('click', openArtistFolderFromArtworkPage);
         
         // 将按钮添加到包裹 div 中
         buttonWrapper.appendChild(openFolderButton);
