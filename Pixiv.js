@@ -332,48 +332,48 @@ SOFTWARE.
     }
 
     // 监听 URL 变化
-    function observeUrlChanges() {
+    function observeUrlChanges(monitorConfig) {
+        const handler = () => {
+            for (const monitorInfo of monitorConfig) {
+                if (location.pathname.includes(monitorInfo.urlSuffix)) {
+                    handlePageChange(monitorInfo);
+                }
+            }
+        };
+
         // 监听 popstate 事件（后退/前进按钮触发）
         window.addEventListener('popstate', () => {
-            if (location.pathname.includes('/artworks/')) {
-                handleArtworkPageChange();
-            }
+            handler();
         });
 
         // 重写 history.pushState
         const originalPushState = history.pushState;
         history.pushState = function() {
             originalPushState.apply(this, arguments);
-            if (location.pathname.includes('/artworks/')) {
-                handleArtworkPageChange();
-            }
+            handler();
         };
 
         // 重写 history.replaceState
         const originalReplaceState = history.replaceState;
         history.replaceState = function() {
             originalReplaceState.apply(this, arguments);
-            if (location.pathname.includes('/artworks/')) {
-                handleArtworkPageChange();
-            }
+            handler();
         };
     }
 
-    // 处理作品页面变化
-    function handleArtworkPageChange() {
-        // 立即尝试添加按钮
-        addButton();
+    // 处理页面变化
+    function handlePageChange(monitorInfo) {
+        // 立即尝试执行处理函数（添加页面元素）
+        monitorInfo.handler();
 
         // 设置一个观察器来监视 DOM 变化
         const observer = new MutationObserver((mutations, obs) => {
-            // 检查目标 section 是否存在
-            const targetSection = document.querySelector(`section[class*="${PIXIV_SECTION_CLASS}"]`);
-            if (targetSection) {
-                // 检查 section 中是否存在保存按钮，若不存在则添加
-                const button = document.getElementById(EAGLE_SAVE_BUTTON_ID);
-                if (!button) {
-                    addButton();
-                }
+            // 检查是否存在指定 ID 的元素，若不存在则添加
+            const button = document.getElementById(monitorInfo.observeID);
+            if (!button) {
+                monitorInfo.handler();
+            } else {
+                observer.disconnect();
             }
         });
 
@@ -383,7 +383,7 @@ SOFTWARE.
             subtree: true
         });
 
-        // 30秒后停止观察（避免无限观察）
+        // 30 秒后停止观察（避免无限观察）
         setTimeout(() => {
             observer.disconnect();
         }, 30000);
@@ -391,16 +391,15 @@ SOFTWARE.
         // 同时设置一个间隔检查
         let checkCount = 0;
         const intervalId = setInterval(() => {
-            const targetSection = document.querySelector(`section[class*="${PIXIV_SECTION_CLASS}"]`);
-            if (targetSection) {
-                const button = document.getElementById(EAGLE_SAVE_BUTTON_ID);
-                if (!button) {
-                    addButton();
-                }
+            const button = document.getElementById(monitorInfo.observeID);
+            if (!button) {
+                monitorInfo.handler();
+            } else {
+                clearInterval(intervalId);
             }
-            
+
             checkCount++;
-            if (checkCount >= 10) { // 5秒后停止检查（500ms * 10）
+            if (checkCount >= 10) { // 5 秒后停止检查（500ms * 10）
                 clearInterval(intervalId);
             }
         }, 500);
@@ -789,12 +788,22 @@ SOFTWARE.
         targetSection.appendChild(buttonWrapper);
     }
 
+    const monitorConfig = [
+        {
+            urlSuffix: "/artworks",
+            observeID: EAGLE_SAVE_BUTTON_ID,
+            handler: addButton,
+        },
+    ];
+
     // 启动脚本
     try {
-        if (location.pathname.includes('/artworks/')) {
-            handleArtworkPageChange();
+        for (const monitorInfo of monitorConfig) {
+            if (location.pathname.includes(monitorInfo.urlSuffix)) {
+                handlePageChange(monitorInfo);
+            }
         }
-        observeUrlChanges();
+        observeUrlChanges(monitorConfig);
     } catch (error) {
         console.error('脚本启动失败:', error);
     }
