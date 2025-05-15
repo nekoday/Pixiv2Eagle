@@ -720,7 +720,7 @@ SOFTWARE.
 
         // 打开画师文件夹
         const eagleUrl = `http://localhost:41595/folder?id=${artistFolder.id}`;
-        window.open(eagleUrl, '_blank');
+        window.location.href = eagleUrl;
 
         // 更新 Eagle 文件夹名称
         if (artistFolder.name !== artistInfo.userName) {
