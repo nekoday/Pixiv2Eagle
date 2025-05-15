@@ -695,21 +695,37 @@ SOFTWARE.
         return null;
     }
 
+    // 更新 Eagle 文件夹名称
+    async function updateFolderNameInEagle(folderId, newName) {
+        await gmFetch('http://localhost:41595/api/folder/update', {
+            method: 'POST',
+            body: JSON.stringify({
+                folderId: folderId,
+                newName: newName
+            })
+        });
+    }
+
     // 在 Eagle 中打开画师专属文件夹
-    async function openArtistFolderInEagle(userId) {
+    async function openArtistFolderInEagle(artistInfo) {
         const folderId = getFolderId();
 
         // 只查找，不自动创建
-        const artistFolder = await findArtistFolder(folderId, userId);
+        const artistFolder = await findArtistFolder(folderId, artistInfo.userId);
 
         if (!artistFolder) {
-            showMessage(`无法找到画师文件夹，请先保存作品创建文件夹。`, true);
+            showMessage(`无法找到画师文件夹，请先保存作品。`, true);
             return;
         }
 
         // 打开画师文件夹
         const eagleUrl = `http://localhost:41595/folder?id=${artistFolder.id}`;
         window.open(eagleUrl, '_blank');
+
+        // 更新 Eagle 文件夹名称
+        if (artistFolder.name !== artistInfo.userName) {
+            updateFolderNameInEagle(artistFolder.id, artistInfo.userName);
+        }
     }
 
     // 从作品页打开画师专属文件夹
@@ -723,17 +739,13 @@ SOFTWARE.
 
         // 通过 DOM 获取画师信息
         let artistInfo = getArtistInfoFromDOM();
-        let userId, userName;
-        if (artistInfo) {
-            userId = artistInfo.userId;
-            userName = artistInfo.userName;
-        } else {
+        if (!artistInfo) {
             showMessage('无法获取画师信息', true);
             return;
         }
 
         try {
-            await openArtistFolderInEagle(userId);
+            await openArtistFolderInEagle(artistInfo);
         } catch (error) {
             console.error(error);
             showMessage(`打开画师文件夹失败: ${error.message}`, true);
