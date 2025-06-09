@@ -394,8 +394,6 @@ SOFTWARE.
             const button = document.getElementById(monitorInfo.observeID);
             if (!button) {
                 monitorInfo.handler();
-            } else {
-                clearInterval(intervalId);
             }
 
             checkCount++;
