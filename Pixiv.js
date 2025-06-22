@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         1.4.2
+// @version         1.4.3
 
 // @author          nekoday
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -564,7 +564,7 @@ SOFTWARE.
                 userName: basicInfo.body.userName,
                 userId: basicInfo.body.userId,
                 illustTitle: basicInfo.body.illustTitle,
-                description: basicInfo.body.description,
+                description: basicInfo.body.description.replace(/<br\s*\/?>/gi, '\n'),
                 pageCount: pagesInfo.pageCount,
                 originalUrls: pagesInfo.originalUrls,
                 uploadDate: basicInfo.body.uploadDate,
