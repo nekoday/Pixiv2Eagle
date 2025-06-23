@@ -179,95 +179,96 @@ SOFTWARE.
         }
     }
 
-    // 递归查找文件夹
-    function findFolderRecursively(folders, targetId) {
-        for (const folder of folders) {
-            if (folder.id === targetId) {
-                return folder;
-            }
-            if (folder.children && folder.children.length > 0) {
-                const found = findFolderRecursively(folder.children, targetId);
-                if (found) {
-                    return found;
+    // 查找画师文件夹（不创建）
+    async function findArtistFolder(pixivFolderId, artistId) {
+
+        // 递归查找文件夹
+        function findFolderRecursively(folders, targetId) {
+            for (const folder of folders) {
+                if (folder.id === targetId) {
+                    return folder;
+                }
+                if (folder.children && folder.children.length > 0) {
+                    const found = findFolderRecursively(folder.children, targetId);
+                    if (found) {
+                        return found;
+                    }
                 }
             }
+            return null;
         }
-        return null;
-    }
 
-    // 在文件夹中查找画师文件夹（通过画师 ID）
-    function findArtistFolderInFolder(folder, artistId) {
-        if (!folder || !folder.children) return null;
-        
-        const artistFolder = folder.children.find(childFolder => {
-            const description = childFolder.description || '';
-            const match = description.match(/pid\s*=\s*(\d+)/);
-            return match && match[1] === artistId;
-        });
-        
-        if (artistFolder) {
-            return {
-                exists: true,
-                id: artistFolder.id,
-                name: artistFolder.name
-            };
-        }
-        return null;
-    }
+        // 在文件夹中查找画师文件夹（通过画师 ID）
+        function findArtistFolderInFolder(folder, artistId) {
+            if (!folder || !folder.children) return null;
 
-    // 在根目录查找画师文件夹
-    async function findArtistFolderInRoot(artistId) {
-        try {
-            const rootFolders = await gmFetch('http://localhost:41595/api/folder/list');
-            if (!rootFolders.status || !Array.isArray(rootFolders.data)) {
-                throw new Error('无法获取根目录文件夹列表');
-            }
-            
-            const existingFolder = rootFolders.data.find(folder => {
-                const description = folder.description || '';
+            const artistFolder = folder.children.find(childFolder => {
+                const description = childFolder.description || '';
                 const match = description.match(/pid\s*=\s*(\d+)/);
                 return match && match[1] === artistId;
             });
-            
-            if (existingFolder) {
+
+            if (artistFolder) {
                 return {
                     exists: true,
-                    id: existingFolder.id,
-                    name: existingFolder.name
+                    id: artistFolder.id,
+                    name: artistFolder.name
                 };
             }
             return null;
-        } catch (error) {
-            console.error('在根目录查找画师文件夹失败:', error);
-            throw error;
         }
-    }
 
-    // 在指定的 Pixiv 文件夹中查找画师文件夹
-    async function findArtistFolderInPixivFolder(pixivFolderId, artistId) {
-        try {
-            // 获取所有文件夹列表
-            const data = await gmFetch('http://localhost:41595/api/folder/list');
-            if (!data.status || !Array.isArray(data.data)) {
-                throw new Error('无法获取文件夹列表');
+        // 在指定的 Pixiv 文件夹中查找画师文件夹
+        async function findArtistFolderInPixivFolder(pixivFolderId, artistId) {
+            try {
+                // 获取所有文件夹列表
+                const data = await gmFetch('http://localhost:41595/api/folder/list');
+                if (!data.status || !Array.isArray(data.data)) {
+                    throw new Error('无法获取文件夹列表');
+                }
+
+                // 递归查找 Pixiv 主文件夹
+                const pixivFolder = findFolderRecursively(data.data, pixivFolderId);
+                if (!pixivFolder) {
+                    throw new Error('找不到指定的 Pixiv 文件夹，请检查输入的文件夹 ID 是否正确');
+                }
+
+                // 在 Pixiv 文件夹中查找画师文件夹
+                return findArtistFolderInFolder(pixivFolder, artistId);
+            } catch (error) {
+                console.error('在Pixiv文件夹中查找画师文件夹失败:', error);
+                throw error;
             }
-            
-            // 递归查找 Pixiv 主文件夹
-            const pixivFolder = findFolderRecursively(data.data, pixivFolderId);
-            if (!pixivFolder) {
-                throw new Error('找不到指定的 Pixiv 文件夹，请检查输入的文件夹 ID 是否正确');
-            }
-            
-            // 在 Pixiv 文件夹中查找画师文件夹
-            return findArtistFolderInFolder(pixivFolder, artistId);
-        } catch (error) {
-            console.error('在Pixiv文件夹中查找画师文件夹失败:', error);
-            throw error;
         }
-    }
 
-    // 查找画师文件夹（不创建）
-    async function findArtistFolder(pixivFolderId, artistId) {
+        // 在根目录查找画师文件夹
+        async function findArtistFolderInRoot(artistId) {
+            try {
+                const rootFolders = await gmFetch('http://localhost:41595/api/folder/list');
+                if (!rootFolders.status || !Array.isArray(rootFolders.data)) {
+                    throw new Error('无法获取根目录文件夹列表');
+                }
+
+                const existingFolder = rootFolders.data.find(folder => {
+                    const description = folder.description || '';
+                    const match = description.match(/pid\s*=\s*(\d+)/);
+                    return match && match[1] === artistId;
+                });
+
+                if (existingFolder) {
+                    return {
+                        exists: true,
+                        id: existingFolder.id,
+                        name: existingFolder.name
+                    };
+                }
+                return null;
+            } catch (error) {
+                console.error('在根目录查找画师文件夹失败:', error);
+                throw error;
+            }
+        }
+
         if (pixivFolderId) {
             return await findArtistFolderInPixivFolder(pixivFolderId, artistId);
         } else {
