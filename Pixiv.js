@@ -556,16 +556,35 @@ SOFTWARE.
                 fetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`).then(r => r.json()),
                 getArtworkPages(artworkId)
             ]);
-            
+
             if (!basicInfo.body) {
                 throw new Error('无法获取作品信息');
+            }
+
+            function formatDescription(desc) {
+                const replaceOpions = [
+                    // Eagle 无法解析的标签
+                    { regex: /<br\s*\/?>/gi, replace: '\n' },
+                    { regex: /<\/?\s*strong>/gi, replace: '' },
+
+                    // Pixiv 短链接 转换为 长链接
+                    { regex: /<a\s+href="(https:\/\/twitter\.com\/([^"]+))"\s+target="_blank">twitter\/\2<\/a>/gi, replace: '$1' },
+                    { regex: /<a\s+href="(https:\/\/www\.pixiv\.net\/artworks\/(\d+))">illust\/\2<\/a>/gi, replace: '$1' },
+                    { regex: /<a\s+href="(https:\/\/www\.pixiv\.net\/users\/(\d+))">user\/\2<\/a>/gi, replace: '$1' },
+                ];
+
+                for (const {regex, replace} of replaceOpions) {
+                    desc = desc.replace(regex, replace);
+                }
+
+                return desc.trim();
             }
 
             const details = {
                 userName: basicInfo.body.userName,
                 userId: basicInfo.body.userId,
                 illustTitle: basicInfo.body.illustTitle,
-                description: basicInfo.body.description.replace(/<br\s*\/?>/gi, '\n'),
+                description: formatDescription(basicInfo.body.description),
                 pageCount: pagesInfo.pageCount,
                 originalUrls: pagesInfo.originalUrls,
                 uploadDate: basicInfo.body.uploadDate,
