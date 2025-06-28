@@ -43,40 +43,40 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 */
 
-(function() {
-    'use strict';
+(function () {
+    "use strict";
 
     // 常量定义
-    const EAGLE_SAVE_BUTTON_ID = 'eagle-save-button-wrapper';
-    const PIXIV_SECTION_CLASS = 'sc-d1c020eb-0';
-    const PIXIV_ARTIST_DIV_CLASS = 'sc-d91e2d15-1 iiAAJk';
+    const EAGLE_SAVE_BUTTON_ID = "eagle-save-button-wrapper";
+    const PIXIV_SECTION_CLASS = "sc-d1c020eb-0";
+    const PIXIV_ARTIST_DIV_CLASS = "sc-d91e2d15-1 iiAAJk";
 
     // 获取文件夹 ID
     function getFolderId() {
-        return GM_getValue('pixivFolderId', '');
+        return GM_getValue("pixivFolderId", "");
     }
 
     // 设置文件夹 ID
     function setFolderId() {
         const currentId = getFolderId();
-        const userInput = prompt('请输入 Pixiv 文件夹 ID 或 Eagle 文件夹链接:', currentId);
+        const userInput = prompt("请输入 Pixiv 文件夹 ID 或 Eagle 文件夹链接：", currentId);
 
         if (userInput === null) return;
-        
+
         let finalId = userInput.trim();
-        const urlParam = 'folder?id=';
+        const urlParam = "folder?id=";
         const urlIndex = finalId.indexOf(urlParam);
 
         if (urlIndex !== -1) {
             // 如果输入的是链接，提取 ID
             finalId = finalId.substring(urlIndex + urlParam.length);
             // 移除可能的后续参数（虽然 Eagle 链接通常没有）
-            const queryParamIndex = finalId.indexOf('?');
+            const queryParamIndex = finalId.indexOf("?");
             if (queryParamIndex !== -1) {
                 finalId = finalId.substring(0, queryParamIndex);
             }
-            const hashIndex = finalId.indexOf('#');
-                if (hashIndex !== -1) {
+            const hashIndex = finalId.indexOf("#");
+            if (hashIndex !== -1) {
                 finalId = finalId.substring(0, hashIndex);
             }
         }
@@ -84,10 +84,10 @@ SOFTWARE.
         // 再次 trim 以防万一
         finalId = finalId.trim();
 
-        GM_setValue('pixivFolderId', finalId);
+        GM_setValue("pixivFolderId", finalId);
 
-        if (finalId === '') {
-            alert('已清空文件夹 ID，将默认在根目录创建画师文件夹');
+        if (finalId === "") {
+            alert("已清空文件夹 ID，将默认在根目录创建画师文件夹");
         } else {
             alert(`文件夹 ID 已设置为: ${finalId}`);
         }
@@ -95,46 +95,147 @@ SOFTWARE.
 
     // 获取是否使用投稿时间
     function getUseUploadDate() {
-        return GM_getValue('useUploadDate', false);
+        return GM_getValue("useUploadDate", false);
     }
 
     // 切换是否使用投稿时间
     function toggleUseUploadDate() {
         const currentMode = getUseUploadDate();
-        GM_setValue('useUploadDate', !currentMode);
-        alert(`使用投稿时间作为添加日期已${!currentMode ? '开启 ✅' : '关闭 ❌'}`);
+        GM_setValue("useUploadDate", !currentMode);
+        alert(`使用投稿时间作为添加日期已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
     }
 
     // 获取是否保存作品描述
     function getSaveDescription() {
-        return GM_getValue('saveDescription', true); // 默认开启
+        return GM_getValue("saveDescription", true); // 默认开启
     }
 
     // 切换是否保存作品描述
     function toggleSaveDescription() {
         const currentMode = getSaveDescription();
-        GM_setValue('saveDescription', !currentMode);
-        alert(`保存作品描述已${!currentMode ? '开启 ✅' : '关闭 ❌'}`);
+        GM_setValue("saveDescription", !currentMode);
+        alert(`保存作品描述已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
     }
 
     // 获取调试模式状态
     function getDebugMode() {
-        return GM_getValue('debugMode', false);
+        return GM_getValue("debugMode", false);
     }
 
     // 切换调试模式
     function toggleDebugMode() {
         const currentMode = getDebugMode();
-        GM_setValue('debugMode', !currentMode);
-        alert(`调试模式已${!currentMode ? '开启 ✅' : '关闭 ❌'}`);
+        GM_setValue("debugMode", !currentMode);
+        alert(`调试模式已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
+    }
+
+    // 设置画师文件夹匹配模板串
+    function setArtistMatcher() {
+        const template = prompt(
+            "请输入画师文件夹匹配模板串，$uid 为画师 ID，$name 为画师名称。\n默认值：$name",
+            GM_getValue("folderNameTemplate", "$name")
+        );
+        if (template === null) return;
+        GM_setValue("folderNameTemplate", template);
+        alert(`✅ 模板字符串已设置为 ${template}`);
+    }
+
+    // 根据用户模板串创建 ArtistMatcher 实例
+    function getArtistMatcher() {
+        return new ArtistMatcher(GM_getValue("folderNameTemplate", "$name"));
     }
 
     // 注册菜单命令
-    GM_registerMenuCommand('设置 Pixiv 文件夹 ID', setFolderId);
-    GM_registerMenuCommand('切换：调试模式', toggleDebugMode);
-    GM_registerMenuCommand('切换：使用投稿时间作为添加日期', toggleUseUploadDate);
-    GM_registerMenuCommand('切换：保存作品描述', toggleSaveDescription); // 新增命令
-    GM_registerMenuCommand('保存当前作品到 Eagle', saveCurrentArtwork);
+    GM_registerMenuCommand("设置 Pixiv 文件夹 ID", setFolderId);
+    GM_registerMenuCommand("切换：调试模式", toggleDebugMode);
+    GM_registerMenuCommand("切换：使用投稿时间作为添加日期", toggleUseUploadDate);
+    GM_registerMenuCommand("切换：保存作品描述", toggleSaveDescription);
+    GM_registerMenuCommand("保存当前作品到 Eagle", saveCurrentArtwork);
+    GM_registerMenuCommand("🧪 设置画师文件夹名称模板串", setArtistMatcher);
+
+    class ArtistMatcher {
+        constructor(template) {
+            this.template = template;
+            this.regex = this.createRegex(template);
+        }
+
+        /**
+         * 根据模板创建正则表达式
+         * @param {string} template - 模板字符串，如 "$uid_$name" 或 "pid = $uid"
+         * @returns {RegExp} 生成的正则表达式
+         */
+        createRegex(template) {
+            // 转义正则表达式特殊字符，但保留占位符
+            let regexStr = template
+                .replace(/[.*+?^${}()|[\]\\]/g, "\\$&") // 转义特殊字符
+                .replace(/\\\$uid/g, "(\\d+)") // $uid 匹配数字
+                .replace(/\\\$name/g, "(.+?)"); // $name 匹配任意字符（非贪婪）
+
+            return new RegExp(`^${regexStr}$`);
+        }
+
+        /**
+         * 检测字符串是否匹配指定的画师（仅比较 uid）
+         * @param {string} str - 待检测的字符串
+         * @param {number|string} uid - 画师 ID
+         * @returns {boolean} 是否匹配
+         */
+        match(str, uid) {
+            const extracted = this.extract(str);
+            if (!extracted || !extracted.uid) {
+                return false;
+            }
+            return extracted.uid.toString() === uid.toString();
+        }
+
+        /**
+         * 从字符串中提取画师信息
+         * @param {string} str - 待解析的字符串
+         * @returns {Object|null} 包含 uid 和 name 的对象，如果不匹配则返回 null
+         */
+        extract(str) {
+            const match = str.match(this.regex);
+            if (!match) {
+                return null;
+            }
+
+            const result = {};
+            const uidMatch = this.template.match(/\$uid/g);
+            const nameMatch = this.template.match(/\$name/g);
+
+            let groupIndex = 1;
+
+            // 按照模板中的顺序提取字段
+            if (this.template.indexOf("$uid") < this.template.indexOf("$name")) {
+                if (uidMatch) result.uid = match[groupIndex++];
+                if (nameMatch) result.name = match[groupIndex++];
+            } else {
+                if (nameMatch) result.name = match[groupIndex++];
+                if (uidMatch) result.uid = match[groupIndex++];
+            }
+
+            return result;
+        }
+
+        /**
+         * 使用指定字段生成对应的字符串
+         * @param {number|string} uid - 画师ID
+         * @param {string} name - 画师名称
+         * @returns {string} 根据模板生成的字符串
+         */
+        generate(uid, name) {
+            return this.template.replace(/\$uid/g, uid).replace(/\$name/g, name);
+        }
+
+        /**
+         * 更新模板
+         * @param {string} newTemplate - 新的模板字符串
+         */
+        updateTemplate(newTemplate) {
+            this.template = newTemplate;
+            this.regex = this.createRegex(newTemplate);
+        }
+    }
 
     // 显示消息（根据调试模式决定是否显示）
     function showMessage(message, forceShow = false) {
@@ -147,17 +248,17 @@ SOFTWARE.
     function gmFetch(url, options = {}) {
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
-                method: options.method || 'GET',
+                method: options.method || "GET",
                 url: url,
                 headers: options.headers || {},
                 data: options.body,
-                responseType: 'json',
-                onload: function(response) {
+                responseType: "json",
+                onload: function (response) {
                     resolve(response.response);
                 },
-                onerror: function(error) {
+                onerror: function (error) {
                     reject(error);
-                }
+                },
             });
         });
     }
@@ -165,23 +266,22 @@ SOFTWARE.
     // 检查 Eagle 是否运行
     async function checkEagle() {
         try {
-            const data = await gmFetch('http://localhost:41595/api/application/info');
+            const data = await gmFetch("http://localhost:41595/api/application/info");
             return {
                 running: true,
-                version: data.data.version
+                version: data.data.version,
             };
         } catch (error) {
-            console.error('Eagle 未启动或无法连接:', error);
+            console.error("Eagle 未启动或无法连接:", error);
             return {
                 running: false,
-                version: null
+                version: null,
             };
         }
     }
 
     // 查找画师文件夹（不创建）
     async function findArtistFolder(pixivFolderId, artistId) {
-
         // 递归查找文件夹
         function findFolderRecursively(folders, targetId) {
             for (const folder of folders) {
@@ -202,8 +302,8 @@ SOFTWARE.
         function findArtistFolderInFolder(folder, artistId) {
             if (!folder || !folder.children) return null;
 
-            const artistFolder = folder.children.find(childFolder => {
-                const description = childFolder.description || '';
+            const artistFolder = folder.children.find((childFolder) => {
+                const description = childFolder.description || "";
                 const match = description.match(/pid\s*=\s*(\d+)/);
                 return match && match[1] === artistId;
             });
@@ -212,7 +312,7 @@ SOFTWARE.
                 return {
                     exists: true,
                     id: artistFolder.id,
-                    name: artistFolder.name
+                    name: artistFolder.name,
                 };
             }
             return null;
@@ -222,21 +322,21 @@ SOFTWARE.
         async function findArtistFolderInPixivFolder(pixivFolderId, artistId) {
             try {
                 // 获取所有文件夹列表
-                const data = await gmFetch('http://localhost:41595/api/folder/list');
+                const data = await gmFetch("http://localhost:41595/api/folder/list");
                 if (!data.status || !Array.isArray(data.data)) {
-                    throw new Error('无法获取文件夹列表');
+                    throw new Error("无法获取文件夹列表");
                 }
 
                 // 递归查找 Pixiv 主文件夹
                 const pixivFolder = findFolderRecursively(data.data, pixivFolderId);
                 if (!pixivFolder) {
-                    throw new Error('找不到指定的 Pixiv 文件夹，请检查输入的文件夹 ID 是否正确');
+                    throw new Error("找不到指定的 Pixiv 文件夹，请检查输入的文件夹 ID 是否正确");
                 }
 
                 // 在 Pixiv 文件夹中查找画师文件夹
                 return findArtistFolderInFolder(pixivFolder, artistId);
             } catch (error) {
-                console.error('在Pixiv文件夹中查找画师文件夹失败:', error);
+                console.error("在 Pixiv 文件夹中查找画师文件夹失败:", error);
                 throw error;
             }
         }
@@ -244,13 +344,13 @@ SOFTWARE.
         // 在根目录查找画师文件夹
         async function findArtistFolderInRoot(artistId) {
             try {
-                const rootFolders = await gmFetch('http://localhost:41595/api/folder/list');
+                const rootFolders = await gmFetch("http://localhost:41595/api/folder/list");
                 if (!rootFolders.status || !Array.isArray(rootFolders.data)) {
-                    throw new Error('无法获取根目录文件夹列表');
+                    throw new Error("无法获取根目录文件夹列表");
                 }
 
-                const existingFolder = rootFolders.data.find(folder => {
-                    const description = folder.description || '';
+                const existingFolder = rootFolders.data.find((folder) => {
+                    const description = folder.description || "";
                     const match = description.match(/pid\s*=\s*(\d+)/);
                     return match && match[1] === artistId;
                 });
@@ -259,12 +359,12 @@ SOFTWARE.
                     return {
                         exists: true,
                         id: existingFolder.id,
-                        name: existingFolder.name
+                        name: existingFolder.name,
                     };
                 }
                 return null;
             } catch (error) {
-                console.error('在根目录查找画师文件夹失败:', error);
+                console.error("在根目录查找画师文件夹失败:", error);
                 throw error;
             }
         }
@@ -278,47 +378,49 @@ SOFTWARE.
 
     // 创建画师专属文件夹
     async function createArtistFolder(artistName, artistId, parentId = null) {
+        const artistMatcher = getArtistMatcher();
+
         try {
             // 创建画师文件夹
-            const createData = await gmFetch('http://localhost:41595/api/folder/create', {
-                method: 'POST',
+            const createData = await gmFetch("http://localhost:41595/api/folder/create", {
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    folderName: artistName,
-                    ...(parentId && { parent: parentId })
-                })
+                    folderName: artistMatcher.generate(artistId, artistName),
+                    ...(parentId && { parent: parentId }),
+                }),
             });
-            
+
             if (!createData.status) {
-                throw new Error('创建文件夹失败');
+                throw new Error("创建文件夹失败");
             }
 
             const newFolderId = createData.data.id;
 
             // 更新文件夹描述
-            const updateData = await gmFetch('http://localhost:41595/api/folder/update', {
-                method: 'POST',
+            const updateData = await gmFetch("http://localhost:41595/api/folder/update", {
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
                     folderId: newFolderId,
-                    newDescription: `pid = ${artistId}`
-                })
+                    newDescription: `pid = ${artistId}`,
+                }),
             });
 
             if (!updateData.status) {
-                throw new Error('更新文件夹描述失败');
+                throw new Error("更新文件夹描述失败");
             }
-            
+
             return {
                 id: newFolderId,
-                name: artistName
+                name: artistName,
             };
         } catch (error) {
-            console.error('创建画师文件夹失败:', error);
+            console.error("创建画师文件夹失败:", error);
             throw error;
         }
     }
@@ -343,20 +445,20 @@ SOFTWARE.
         };
 
         // 监听 popstate 事件（后退/前进按钮触发）
-        window.addEventListener('popstate', () => {
+        window.addEventListener("popstate", () => {
             handler();
         });
 
         // 重写 history.pushState
         const originalPushState = history.pushState;
-        history.pushState = function() {
+        history.pushState = function () {
             originalPushState.apply(this, arguments);
             handler();
         };
 
         // 重写 history.replaceState
         const originalReplaceState = history.replaceState;
-        history.replaceState = function() {
+        history.replaceState = function () {
             originalReplaceState.apply(this, arguments);
             handler();
         };
@@ -381,7 +483,7 @@ SOFTWARE.
         // 配置观察器
         observer.observe(document.body, {
             childList: true,
-            subtree: true
+            subtree: true,
         });
 
         // 30 秒后停止观察（避免无限观察）
@@ -398,7 +500,8 @@ SOFTWARE.
             }
 
             checkCount++;
-            if (checkCount >= 10) { // 5 秒后停止检查（500ms * 10）
+            if (checkCount >= 10) {
+                // 5 秒后停止检查（500ms * 10）
                 clearInterval(intervalId);
             }
         }, 500);
@@ -406,7 +509,7 @@ SOFTWARE.
 
     // 等待目标 section 元素加载
     function waitForElement(selector) {
-        return new Promise(resolve => {
+        return new Promise((resolve) => {
             // 首先检查元素是否已经存在
             const element = document.querySelector(selector);
             if (element) {
@@ -424,7 +527,7 @@ SOFTWARE.
 
             observer.observe(document.body, {
                 childList: true,
-                subtree: true
+                subtree: true,
             });
 
             // 10 秒后超时
@@ -437,43 +540,43 @@ SOFTWARE.
 
     // 创建 Pixiv 风格的按钮
     function createPixivStyledButton(text) {
-        const button = document.createElement('div');
+        const button = document.createElement("div");
         button.textContent = text;
-        button.style.cursor = 'pointer';
-        button.style.fontSize = '14px';
-        button.style.padding = '8px 16px';
-        button.style.borderRadius = '999px';
-        button.style.color = '#333';
-        button.style.backgroundColor = 'transparent';
-        button.style.display = 'flex';
-        button.style.alignItems = 'center';
-        button.style.gap = '4px';
-        button.style.transition = 'all 0.2s ease';
-        button.style.border = '1px solid #d6d6d6';
+        button.style.cursor = "pointer";
+        button.style.fontSize = "14px";
+        button.style.padding = "8px 16px";
+        button.style.borderRadius = "999px";
+        button.style.color = "#333";
+        button.style.backgroundColor = "transparent";
+        button.style.display = "flex";
+        button.style.alignItems = "center";
+        button.style.gap = "4px";
+        button.style.transition = "all 0.2s ease";
+        button.style.border = "1px solid #d6d6d6";
 
         // 添加鼠标悬浮效果
-        button.addEventListener('mouseenter', () => {
-            button.style.backgroundColor = '#0096fa';
-            button.style.color = 'white';
-            button.style.border = '1px solid #0096fa';
+        button.addEventListener("mouseenter", () => {
+            button.style.backgroundColor = "#0096fa";
+            button.style.color = "white";
+            button.style.border = "1px solid #0096fa";
         });
-        
+
         // 添加鼠标离开效果
-        button.addEventListener('mouseleave', () => {
-            button.style.backgroundColor = 'transparent';
-            button.style.color = '#333';
-            button.style.border = '1px solid #d6d6d6';
+        button.addEventListener("mouseleave", () => {
+            button.style.backgroundColor = "transparent";
+            button.style.color = "#333";
+            button.style.border = "1px solid #d6d6d6";
         });
-        
+
         // 添加点击效果
-        button.addEventListener('mousedown', () => {
-            button.style.backgroundColor = '#0075c5';
-            button.style.border = '1px solid #0075c5';
+        button.addEventListener("mousedown", () => {
+            button.style.backgroundColor = "#0075c5";
+            button.style.border = "1px solid #0075c5";
         });
-        
-        button.addEventListener('mouseup', () => {
-            button.style.backgroundColor = '#0096fa';
-            button.style.border = '1px solid #0096fa';
+
+        button.addEventListener("mouseup", () => {
+            button.style.backgroundColor = "#0096fa";
+            button.style.border = "1px solid #0096fa";
         });
 
         return button;
@@ -488,11 +591,11 @@ SOFTWARE.
     // 处理标签
     function processTags(tags, isOriginal, aiType) {
         if (!Array.isArray(tags)) return [];
-        
+
         // 初始化结果数组和标签集合
         const processedTags = [];
         const tagSet = new Set();
-        
+
         // 定义添加标签的辅助函数
         const addTagIfNotExists = (tag) => {
             if (!tagSet.has(tag)) {
@@ -502,23 +605,23 @@ SOFTWARE.
             }
             return false;
         };
-        
+
         // 首先添加特殊标签（如果需要）
         // 如果是 AI 生成的作品，添加"AI生成"标签
         if (aiType === 2) {
-            addTagIfNotExists('AI生成');
+            addTagIfNotExists("AI生成");
         }
-        
+
         // 如果是原创作品，添加"原创"标签
         if (isOriginal) {
-            addTagIfNotExists('原创');
+            addTagIfNotExists("原创");
         }
-        
+
         // 处理原始标签，保持顺序但去除重复
-        tags.forEach(tagInfo => {
+        tags.forEach((tagInfo) => {
             const tag = tagInfo.tag;
             addTagIfNotExists(tag);
-            
+
             // 如果有翻译且有英文翻译，将其作为单独的标签处理
             if (tagInfo.translation && tagInfo.translation.en) {
                 const enTag = tagInfo.translation.en;
@@ -534,17 +637,17 @@ SOFTWARE.
         try {
             const response = await fetch(`https://www.pixiv.net/ajax/illust/${artworkId}/pages?lang=zh`);
             const data = await response.json();
-            
+
             if (!data.body || !Array.isArray(data.body)) {
-                throw new Error('无法获取作品页面信息');
+                throw new Error("无法获取作品页面信息");
             }
 
             return {
                 pageCount: data.body.length,
-                originalUrls: data.body.map(page => page.urls.original)
+                originalUrls: data.body.map((page) => page.urls.original),
             };
         } catch (error) {
-            console.error('获取作品页面信息失败:', error);
+            console.error("获取作品页面信息失败:", error);
             throw error;
         }
     }
@@ -553,27 +656,33 @@ SOFTWARE.
     async function getArtworkDetails(artworkId) {
         try {
             const [basicInfo, pagesInfo] = await Promise.all([
-                fetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`).then(r => r.json()),
-                getArtworkPages(artworkId)
+                fetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`).then((r) => r.json()),
+                getArtworkPages(artworkId),
             ]);
 
             if (!basicInfo.body) {
-                throw new Error('无法获取作品信息');
+                throw new Error("无法获取作品信息");
             }
 
             function formatDescription(desc) {
                 const replaceOperations = [
                     // Eagle 无法解析的标签
-                    { regex: /<br\s*\/?>/gi, replace: '\n' },
-                    { regex: /<\/?\s*strong>/gi, replace: '' },
+                    { regex: /<br\s*\/?>/gi, replace: "\n" },
+                    { regex: /<\/?\s*strong>/gi, replace: "" },
 
                     // Pixiv 短链接 转换为 长链接
-                    { regex: /<a\s+href="(https:\/\/twitter\.com\/([^"]+))"\s+target="_blank">twitter\/\2<\/a>/gi, replace: '$1' },
-                    { regex: /<a\s+href="(https:\/\/www\.pixiv\.net\/artworks\/(\d+))">illust\/\2<\/a>/gi, replace: '$1' },
-                    { regex: /<a\s+href="(https:\/\/www\.pixiv\.net\/users\/(\d+))">user\/\2<\/a>/gi, replace: '$1' },
+                    {
+                        regex: /<a\s+href="(https:\/\/twitter\.com\/([^"]+))"\s+target="_blank">twitter\/\2<\/a>/gi,
+                        replace: "$1",
+                    },
+                    {
+                        regex: /<a\s+href="(https:\/\/www\.pixiv\.net\/artworks\/(\d+))">illust\/\2<\/a>/gi,
+                        replace: "$1",
+                    },
+                    { regex: /<a\s+href="(https:\/\/www\.pixiv\.net\/users\/(\d+))">user\/\2<\/a>/gi, replace: "$1" },
                 ];
 
-                for (const {regex, replace} of replaceOperations) {
+                for (const { regex, replace } of replaceOperations) {
                     desc = desc.replace(regex, replace);
                 }
 
@@ -588,12 +697,12 @@ SOFTWARE.
                 pageCount: pagesInfo.pageCount,
                 originalUrls: pagesInfo.originalUrls,
                 uploadDate: basicInfo.body.uploadDate,
-                tags: processTags(basicInfo.body.tags.tags, basicInfo.body.isOriginal, basicInfo.body.aiType)
+                tags: processTags(basicInfo.body.tags.tags, basicInfo.body.isOriginal, basicInfo.body.aiType),
             };
 
             return details;
         } catch (error) {
-            console.error('获取作品信息失败:', error);
+            console.error("获取作品信息失败:", error);
             throw error;
         }
     }
@@ -614,10 +723,10 @@ SOFTWARE.
             const annotation = shouldSaveDescription ? details.description : undefined;
 
             // 批量添加图片
-            const data = await gmFetch('http://localhost:41595/api/item/addFromURLs', {
-                method: 'POST',
+            const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
+                method: "POST",
                 headers: {
-                    'Content-Type': 'application/json',
+                    "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
                     items: imageUrls.map((url, index) => ({
@@ -628,20 +737,20 @@ SOFTWARE.
                         ...(annotation && { annotation: annotation }), // 添加 annotation 字段
                         ...(modificationTime && { modificationTime: modificationTime }),
                         headers: {
-                            "referer": "https://www.pixiv.net/"
+                            referer: "https://www.pixiv.net/",
                         },
                     })),
-                    folderId: folderId
-                })
+                    folderId: folderId,
+                }),
             });
 
             if (!data.status) {
-                throw new Error('保存图片失败');
+                throw new Error("保存图片失败");
             }
 
             return data.data;
         } catch (error) {
-            console.error('保存图片失败:', error);
+            console.error("保存图片失败:", error);
             throw error;
         }
     }
@@ -649,7 +758,7 @@ SOFTWARE.
     // 保存当前作品到 Eagle
     async function saveCurrentArtwork() {
         const folderId = getFolderId();
-        const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : '未设置 Pixiv 文件夹 ID';
+        const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : "未设置 Pixiv 文件夹 ID";
 
         // 首先检查 Eagle 是否运行
         const eagleStatus = await checkEagle();
@@ -660,34 +769,34 @@ SOFTWARE.
 
         const artworkId = getArtworkId();
         if (!artworkId) {
-            showMessage('无法获取作品 ID', true);
+            showMessage("无法获取作品 ID", true);
             return;
         }
 
         try {
             const details = await getArtworkDetails(artworkId);
-            
+
             // 检查或创建画师专属文件夹
             const artistFolder = await getArtistFolder(folderId, details.userId, details.userName);
 
             // 保存图片到Eagle
             await saveToEagle(details.originalUrls, artistFolder.id, details, artworkId);
-            
+
             const message = [
                 folderInfo,
                 `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`,
-                '----------------------------',
+                "----------------------------",
                 `Eagle版本: ${eagleStatus.version}`,
-                '----------------------------',
+                "----------------------------",
                 `作品ID: ${artworkId}`,
                 `作者: ${details.userName} (ID: ${details.userId})`,
                 `作品名称: ${details.illustTitle}`,
                 `页数: ${details.pageCount}`,
                 `上传时间: ${details.uploadDate}`,
-                `标签: ${details.tags.join(', ')}`,
-                '----------------------------',
-                '✅ 图片已成功保存到 Eagle'
-            ].join('\n');
+                `标签: ${details.tags.join(", ")}`,
+                "----------------------------",
+                "✅ 图片已成功保存到 Eagle",
+            ].join("\n");
 
             showMessage(message);
         } catch (error) {
@@ -699,11 +808,11 @@ SOFTWARE.
     // 通过 DOM 获取画师 UID 和用户名
     function getArtistInfoFromDOM() {
         // 通过 div 的 class 查找画师信息
-        const artistDiv = document.querySelector(`div.${PIXIV_ARTIST_DIV_CLASS.replace(/ /g, '.')}`);
+        const artistDiv = document.querySelector(`div.${PIXIV_ARTIST_DIV_CLASS.replace(/ /g, ".")}`);
         if (artistDiv) {
             const link = artistDiv.querySelector('a[href^="/users/"]');
             if (link) {
-                const userId = link.getAttribute('data-gtm-value') || (link.getAttribute('href').match(/\d+/) || [])[0];
+                const userId = link.getAttribute("data-gtm-value") || (link.getAttribute("href").match(/\d+/) || [])[0];
                 const userName = link.textContent.trim();
                 if (userId && userName) {
                     return { userId, userName };
@@ -715,12 +824,12 @@ SOFTWARE.
 
     // 更新 Eagle 文件夹名称
     async function updateFolderNameInEagle(folderId, newName) {
-        await gmFetch('http://localhost:41595/api/folder/update', {
-            method: 'POST',
+        await gmFetch("http://localhost:41595/api/folder/update", {
+            method: "POST",
             body: JSON.stringify({
                 folderId: folderId,
-                newName: newName
-            })
+                newName: newName,
+            }),
         });
     }
 
@@ -740,9 +849,13 @@ SOFTWARE.
         const eagleUrl = `http://localhost:41595/folder?id=${artistFolder.id}`;
         window.location.href = eagleUrl;
 
+        // 计算正确的文件夹名称
+        const artistMatcher = getArtistMatcher();
+        const targetFolderName = artistMatcher.generate(artistInfo.userId, artistInfo.userName);
+
         // 更新 Eagle 文件夹名称
-        if (artistFolder.name !== artistInfo.userName) {
-            updateFolderNameInEagle(artistFolder.id, artistInfo.userName);
+        if (artistFolder.name !== targetFolderName) {
+            updateFolderNameInEagle(artistFolder.id, targetFolderName);
         }
     }
 
@@ -751,14 +864,14 @@ SOFTWARE.
         // 首先检查 Eagle 是否运行
         const eagleStatus = await checkEagle();
         if (!eagleStatus.running) {
-            showMessage('Eagle 未启动，请先启动 Eagle 应用！', true);
+            showMessage("Eagle 未启动，请先启动 Eagle 应用！", true);
             return;
         }
 
         // 通过 DOM 获取画师信息
         let artistInfo = getArtistInfoFromDOM();
         if (!artistInfo) {
-            showMessage('无法获取画师信息', true);
+            showMessage("无法获取画师信息", true);
             return;
         }
 
@@ -780,40 +893,40 @@ SOFTWARE.
 
         // 等待目标 section 加载
         const targetSection = await waitForElement(`section[class*="${PIXIV_SECTION_CLASS}"]`);
-        if (!targetSection) return;  // 如果找不到目标 section，直接返回
-        
+        if (!targetSection) return; // 如果找不到目标 section，直接返回
+
         // 检查按钮是否已经存在（双重检查，以防在等待过程中已添加）
         if (document.getElementById(EAGLE_SAVE_BUTTON_ID)) return;
 
         // 找到 section 中最后一个 div 作为参考
-        const lastDiv = targetSection.querySelector('div:last-of-type');
+        const lastDiv = targetSection.querySelector("div:last-of-type");
         if (!lastDiv) return;
-        
+
         // 创建包裹 div
-        const buttonWrapper = document.createElement('div');
+        const buttonWrapper = document.createElement("div");
         buttonWrapper.id = EAGLE_SAVE_BUTTON_ID;
         buttonWrapper.className = lastDiv.className;
-        buttonWrapper.style.display = 'flex';
-        buttonWrapper.style.alignItems = 'center';
-        buttonWrapper.style.justifyContent = 'center';
-        buttonWrapper.style.gap = '8px'; // 添加按钮之间的间距
-        
+        buttonWrapper.style.display = "flex";
+        buttonWrapper.style.alignItems = "center";
+        buttonWrapper.style.justifyContent = "center";
+        buttonWrapper.style.gap = "8px"; // 添加按钮之间的间距
+
         // 创建保存按钮
-        const saveButton = createPixivStyledButton('保存到 Eagle');
-        
+        const saveButton = createPixivStyledButton("保存到 Eagle");
+
         // 添加保存按钮点击事件
-        saveButton.addEventListener('click', saveCurrentArtwork);
-        
+        saveButton.addEventListener("click", saveCurrentArtwork);
+
         // 创建打开文件夹按钮
-        const openFolderButton = createPixivStyledButton('打开画师文件夹');
-        
+        const openFolderButton = createPixivStyledButton("打开画师文件夹");
+
         // 添加打开文件夹按钮点击事件
-        openFolderButton.addEventListener('click', openArtistFolderFromArtworkPage);
-        
+        openFolderButton.addEventListener("click", openArtistFolderFromArtworkPage);
+
         // 将按钮添加到包裹 div 中
         buttonWrapper.appendChild(openFolderButton);
         buttonWrapper.appendChild(saveButton);
-        
+
         // 将按钮添加到 section 的最后
         targetSection.appendChild(buttonWrapper);
     }
@@ -835,6 +948,6 @@ SOFTWARE.
         }
         observeUrlChanges(monitorConfig);
     } catch (error) {
-        console.error('脚本启动失败:', error);
+        console.error("脚本启动失败:", error);
     }
 })();
