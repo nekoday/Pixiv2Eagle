@@ -12,6 +12,7 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
 - 🔧 Configurable Pixiv folder ID
 - 🐛 Debug mode support
 - ⏰ Option to use artwork upload time as the addition date
+- 🧪 (Experimental) Set artist folder names through custom templates
 
 ## Requirements
 
@@ -41,6 +42,12 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
 - If the folder ID is cleared:
   - The script will search for or create artist-specific folders in the Eagle root directory
   - When cleared, a message will appear: "Folder ID has been cleared, artist folders will be created in the root directory by default"
+
+### Artist Folder Name Template Configuration Rules
+
+- `$uid` represents the artist ID, `$name` represents the artist name
+- By default, the artist name is used as the folder name, corresponding to the template `$name`
+- A template example: `$uid_$name`
 
 ## Feature Details
 ### Saving Artworks

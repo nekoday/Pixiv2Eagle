@@ -132,7 +132,7 @@ SOFTWARE.
     // 设置画师文件夹匹配模板串
     function setArtistMatcher() {
         const template = prompt(
-            "请输入画师文件夹匹配模板串，$uid 为画师 ID，$name 为画师名称。\n默认值：$name",
+            "请输入画师文件夹匹配模板，$uid 为画师 ID，$name 为画师名称。\n默认值：$name",
             GM_getValue("folderNameTemplate", "$name")
         );
         if (template === null) return;
@@ -151,7 +151,7 @@ SOFTWARE.
     GM_registerMenuCommand("切换：使用投稿时间作为添加日期", toggleUseUploadDate);
     GM_registerMenuCommand("切换：保存作品描述", toggleSaveDescription);
     GM_registerMenuCommand("保存当前作品到 Eagle", saveCurrentArtwork);
-    GM_registerMenuCommand("🧪 设置画师文件夹名称模板串", setArtistMatcher);
+    GM_registerMenuCommand("🧪 设置画师文件夹名称模板", setArtistMatcher);
 
     class ArtistMatcher {
         constructor(template) {
