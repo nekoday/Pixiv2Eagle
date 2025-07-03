@@ -117,6 +117,18 @@ SOFTWARE.
         alert(`保存作品描述已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
     }
 
+    // 切换是否为多 P 作品创建子文件夹
+    function toggleCreateSubFolder() {
+        const currentMode = GM_getValue("createSubFolder", false);
+        GM_setValue("createSubFolder", !currentMode);
+        alert(`为多 P 作品创建子文件夹已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
+    }
+
+    // 获取是否为多 P 作品创建子文件夹
+    function getCreateSubFolder() {
+        return GM_getValue("createSubFolder", false);
+    }
+
     // 获取调试模式状态
     function getDebugMode() {
         return GM_getValue("debugMode", false);
@@ -146,11 +158,12 @@ SOFTWARE.
     }
 
     // 注册菜单命令
-    GM_registerMenuCommand("设置 Pixiv 文件夹 ID", setFolderId);
-    GM_registerMenuCommand("切换：调试模式", toggleDebugMode);
-    GM_registerMenuCommand("切换：使用投稿时间作为添加日期", toggleUseUploadDate);
-    GM_registerMenuCommand("切换：保存作品描述", toggleSaveDescription);
-    GM_registerMenuCommand("保存当前作品到 Eagle", saveCurrentArtwork);
+    GM_registerMenuCommand("📁 设置 Pixiv 文件夹 ID", setFolderId);
+    GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", toggleUseUploadDate);
+    GM_registerMenuCommand("🕗 切换：保存作品描述", toggleSaveDescription);
+    GM_registerMenuCommand("🗂️ 切换：为多 P 作品创建子文件夹", toggleCreateSubFolder);
+    GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
+    GM_registerMenuCommand("🧪 切换：调试模式", toggleDebugMode);
     GM_registerMenuCommand("🧪 设置画师文件夹名称模板", setArtistMatcher);
 
     class ArtistMatcher {
@@ -376,45 +389,58 @@ SOFTWARE.
         }
     }
 
-    // 创建画师专属文件夹
-    async function createArtistFolder(artistName, artistId, parentId = null) {
-        const artistMatcher = getArtistMatcher();
-
+    // 创建 Eagle 文件夹
+    async function createEagleFolder(folderName, parentId = null, description = "") {
         try {
-            // 创建画师文件夹
-            const createData = await gmFetch("http://localhost:41595/api/folder/create", {
+            const data = await gmFetch("http://localhost:41595/api/folder/create", {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    folderName: artistMatcher.generate(artistId, artistName),
+                    folderName: folderName,
                     ...(parentId && { parent: parentId }),
                 }),
             });
 
-            if (!createData.status) {
+            if (!data.status) {
                 throw new Error("创建文件夹失败");
             }
 
-            const newFolderId = createData.data.id;
+            const newFolderId = data.data.id;
 
-            // 更新文件夹描述
-            const updateData = await gmFetch("http://localhost:41595/api/folder/update", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    folderId: newFolderId,
-                    newDescription: `pid = ${artistId}`,
-                }),
-            });
+            // 如果有描述，更新文件夹描述
+            if (description) {
+                const updateData = await gmFetch("http://localhost:41595/api/folder/update", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                    },
+                    body: JSON.stringify({
+                        folderId: newFolderId,
+                        newDescription: description,
+                    }),
+                });
 
-            if (!updateData.status) {
-                throw new Error("更新文件夹描述失败");
+                if (!updateData.status) {
+                    throw new Error("更新文件夹描述失败");
+                }
             }
 
+            return newFolderId;
+        } catch (error) {
+            console.error("创建文件夹失败:", error);
+            throw error;
+        }
+    }
+
+    // 创建画师专属文件夹
+    async function createArtistFolder(artistName, artistId, parentId = null) {
+        const artistMatcher = getArtistMatcher();
+        const folderName = artistMatcher.generate(artistId, artistName);
+
+        try {
+            const newFolderId = await createEagleFolder(folderName, parentId, `pid = ${artistId}`);
             return {
                 id: newFolderId,
                 name: artistName,
@@ -582,7 +608,7 @@ SOFTWARE.
         return button;
     }
 
-    // 获取作品ID
+    // 获取作品 ID
     function getArtworkId() {
         const match = location.pathname.match(/^\/artworks\/(\d+)/);
         return match ? match[1] : null;
@@ -692,7 +718,7 @@ SOFTWARE.
             const details = {
                 userName: basicInfo.body.userName,
                 userId: basicInfo.body.userId,
-                illustTitle: basicInfo.body.illustTitle,
+                illustTitle: basicInfo.body.illustTitle === "무제" ? `PID_${artworkId}` : basicInfo.body.illustTitle,
                 description: formatDescription(basicInfo.body.description),
                 pageCount: pagesInfo.pageCount,
                 originalUrls: pagesInfo.originalUrls,
@@ -778,9 +804,15 @@ SOFTWARE.
 
             // 检查或创建画师专属文件夹
             const artistFolder = await getArtistFolder(folderId, details.userId, details.userName);
+            let targetFolderId = artistFolder.id;
 
-            // 保存图片到Eagle
-            await saveToEagle(details.originalUrls, artistFolder.id, details, artworkId);
+            // 如果是多 P 作品且设置了创建子文件夹，则创建子文件夹
+            if (getCreateSubFolder() && details.pageCount > 1) {
+                targetFolderId = await createEagleFolder(details.illustTitle, artistFolder.id, artworkId);
+            }
+
+            // 保存图片到 Eagle
+            await saveToEagle(details.originalUrls, targetFolderId, details, artworkId);
 
             const message = [
                 folderInfo,
