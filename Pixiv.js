@@ -161,7 +161,7 @@ SOFTWARE.
     GM_registerMenuCommand("📁 设置 Pixiv 文件夹 ID", setFolderId);
     GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", toggleUseUploadDate);
     GM_registerMenuCommand("🕗 切换：保存作品描述", toggleSaveDescription);
-    GM_registerMenuCommand("🗂️ 切换：为多 P 作品创建子文件夹", toggleCreateSubFolder);
+    GM_registerMenuCommand("🗂️ 切换：为多页作品创建子文件夹", toggleCreateSubFolder);
     GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
     GM_registerMenuCommand("🧪 切换：调试模式", toggleDebugMode);
     GM_registerMenuCommand("🧪 设置画师文件夹名称模板", setArtistMatcher);
