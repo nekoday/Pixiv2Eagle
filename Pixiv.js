@@ -17,6 +17,10 @@
 // @grant           GM_getValue
 // @grant           GM_setValue
 // @grant           GM_registerMenuCommand
+// @connect         localhost
+// @connect         127.0.0.1
+// @connect         i.pximg.net
+// @connect         cdn.jsdelivr.net
 // ==/UserScript==
 
 /*
@@ -266,6 +270,25 @@ SOFTWARE.
                 headers: options.headers || {},
                 data: options.body,
                 responseType: "json",
+                onload: function (response) {
+                    resolve(response.response);
+                },
+                onerror: function (error) {
+                    reject(error);
+                },
+            });
+        });
+    }
+
+    // 封装 GM_xmlhttpRequest 获取二进制数据（ArrayBuffer/Blob）
+    function gmFetchBinary(url, options = {}) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: options.method || "GET",
+                url: url,
+                headers: options.headers || {},
+                data: options.body,
+                responseType: options.responseType || "arraybuffer",
                 onload: function (response) {
                     resolve(response.response);
                 },
@@ -735,6 +758,8 @@ SOFTWARE.
                 originalUrls: pagesInfo.originalUrls,
                 uploadDate: basicInfo.body.uploadDate,
                 tags: processTags(basicInfo.body.tags.tags, basicInfo.body.isOriginal, basicInfo.body.aiType),
+                // 作品类型：0 插画、1 漫画、2 动图（ugoira）
+                illustType: basicInfo.body.illustType,
             };
 
             return details;
@@ -742,6 +767,275 @@ SOFTWARE.
             console.error("获取作品信息失败:", error);
             throw error;
         }
+    }
+
+    // 获取动图（ugoira）元数据
+    async function getUgoiraMeta(artworkId) {
+        try {
+            const response = await fetch(`https://www.pixiv.net/ajax/illust/${artworkId}/ugoira_meta?lang=zh`);
+            const data = await response.json();
+            if (!data || !data.body || !data.body.originalSrc || !Array.isArray(data.body.frames)) {
+                throw new Error("无法获取动图元数据");
+            }
+            return {
+                originalSrc: data.body.originalSrc,
+                frames: data.body.frames, // [{file: '000000.jpg', delay: 100}, ...]
+            };
+        } catch (err) {
+            console.error("获取动图元数据失败:", err);
+            throw err;
+        }
+    }
+
+    // 以文本形式获取内容
+    function gmFetchText(url, options = {}) {
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method: options.method || "GET",
+                url: url,
+                headers: options.headers || {},
+                data: options.body,
+                responseType: "text",
+                onload: function (response) {
+                    resolve(response.responseText || response.response);
+                },
+                onerror: function (error) {
+                    reject(error);
+                },
+            });
+        });
+    }
+
+    // 下载 ugoira 的 zip 数据
+    async function downloadUgoiraZip(zipUrl) {
+        const buffer = await gmFetchBinary(zipUrl, {
+            responseType: "arraybuffer",
+            headers: { referer: "https://www.pixiv.net/" },
+        });
+        if (!buffer) throw new Error("下载 ugoira 压缩包失败");
+        return buffer;
+    }
+
+    // 将 Uint8Array 解码成 Image 对象
+    function decodeImageFromU8(u8, mime) {
+        return new Promise((resolve, reject) => {
+            const blob = new Blob([u8], { type: mime });
+            const url = URL.createObjectURL(blob);
+            const img = new Image();
+            img.onload = () => {
+                URL.revokeObjectURL(url);
+                resolve(img);
+            };
+            img.onerror = (e) => {
+                URL.revokeObjectURL(url);
+                reject(e);
+            };
+            img.src = url;
+        });
+    }
+
+    // 将动图转换为 GIF Blob
+    async function convertUgoiraToGifBlob(artworkId) {
+        // 动态加载 fflate（解压 zip）库到用户脚本沙箱
+        async function ensureFflateLoaded() {
+            if (window.fflate) return;
+            const code = await gmFetchText("https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.min.js");
+            eval(code);
+            if (!window.fflate) throw new Error("fflate 加载失败");
+        }
+
+        // 动态加载 gif.js 到用户脚本沙箱，并准备 worker 脚本 URL
+        let __gifWorkerURL = null;
+        async function ensureGifLibLoaded() {
+            if (!window.GIF) {
+                const code = await gmFetchText("https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.min.js");
+                eval(code);
+            }
+            if (!__gifWorkerURL) {
+                const workerCode = await gmFetchText("https://cdn.jsdelivr.net/npm/gif.js@0.2.0/dist/gif.worker.js");
+                __gifWorkerURL = URL.createObjectURL(new Blob([workerCode], { type: "text/javascript" }));
+            }
+            if (!window.GIF || !__gifWorkerURL) throw new Error("gif.js 加载失败");
+        }
+
+        await ensureFflateLoaded();
+        await ensureGifLibLoaded();
+
+        const meta = await getUgoiraMeta(artworkId);
+        const zipBuf = await downloadUgoiraZip(meta.originalSrc);
+        const entries = window.fflate.unzipSync(new Uint8Array(zipBuf));
+
+        if (!entries || !meta.frames || meta.frames.length === 0) {
+            throw new Error("动图数据不完整");
+        }
+
+        // 猜测帧图片类型
+        const guessMime = (name) => (name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
+
+        // 解码第一帧获取宽高
+        const first = meta.frames[0];
+        const firstBytes = entries[first.file];
+        if (!firstBytes) throw new Error("压缩包中缺少帧文件: " + first.file);
+        const firstImg = await decodeImageFromU8(firstBytes, guessMime(first.file));
+
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        canvas.width = firstImg.width;
+        canvas.height = firstImg.height;
+
+        const gif = new window.GIF({
+            workers: 2,
+            quality: 10,
+            width: canvas.width,
+            height: canvas.height,
+            workerScript: __gifWorkerURL,
+        });
+
+        // 绘制第一帧并加入 GIF
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(firstImg, 0, 0);
+        gif.addFrame(ctx, { copy: true, delay: Math.max(20, first.delay || 100) });
+
+        // 处理后续帧
+        for (let i = 1; i < meta.frames.length; i++) {
+            const f = meta.frames[i];
+            const bytes = entries[f.file];
+            if (!bytes) throw new Error("压缩包中缺少帧文件: " + f.file);
+            const img = await decodeImageFromU8(bytes, guessMime(f.file));
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(img, 0, 0);
+            gif.addFrame(ctx, { copy: true, delay: Math.max(20, f.delay || 100) });
+        }
+
+        const blob = await new Promise((resolve) => {
+            gif.on("finished", (b) => resolve(b));
+            gif.render();
+        });
+        return blob;
+    }
+
+    // 将 Blob 转为 base64（不含 data: 前缀）
+    async function blobToBase64(blob) {
+        // 使用 FileReader 转 dataURL 再提取 base64，避免大 Blob 手动拼接导致内存/性能问题
+        const dataURL = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+        const comma = dataURL.indexOf(",");
+        return dataURL.substring(comma + 1);
+    }
+
+    async function blobToDataURL(blob) {
+        return await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+    }
+
+    // 保存动图（转换后的 GIF）到 Eagle
+    async function saveUgoiraAsGifToEagle(artworkId, folderId, details) {
+        const gifBlob = await convertUgoiraToGifBlob(artworkId);
+        const [base64, dataURL] = await (async () => {
+            const du = await blobToDataURL(gifBlob);
+            const comma = du.indexOf(",");
+            return [du.substring(comma + 1), du];
+        })();
+
+        const baseTitle = details.illustTitle;
+        const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
+
+        const useUploadDate = getUseUploadDate();
+        const modificationTime = useUploadDate ? new Date(details.uploadDate).getTime() : undefined;
+        const shouldSaveDescription = getSaveDescription();
+        const annotation = shouldSaveDescription ? details.description : undefined;
+
+        let payload = {
+            items: [
+                {
+                    data: base64,
+                    ext: "gif",
+                    name: baseTitle,
+                    fileName: `${baseTitle}.gif`,
+                    website: artworkUrl,
+                    tags: details.tags,
+                    ...(annotation && { annotation }),
+                    ...(modificationTime && { modificationTime }),
+                },
+            ],
+            folderId: folderId,
+        };
+
+        let data = await gmFetch("http://localhost:41595/api/item/addFromBase64", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+
+        // 如果失败，尝试 dataURL 兼容格式
+        if (!data || !data.status) {
+            // 尝试使用 dataURL 字段
+            try {
+                payload = {
+                    items: [
+                        {
+                            dataURL: dataURL,
+                            name: baseTitle,
+                            fileName: `${baseTitle}.gif`,
+                            website: artworkUrl,
+                            tags: details.tags,
+                            ...(annotation && { annotation }),
+                            ...(modificationTime && { modificationTime }),
+                        },
+                    ],
+                    folderId: folderId,
+                };
+                data = await gmFetch("http://localhost:41595/api/item/addFromBase64", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload),
+                });
+            } catch (e) {
+                console.error("addFromBase64(dataURL) 调用异常:", e);
+            }
+        }
+
+        if (!data || !data.status) {
+            // 再次回退：尝试通过 addFromURLs 使用 data:URL
+            try {
+                const viaURL = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        items: [
+                            {
+                                url: dataURL,
+                                name: baseTitle,
+                                website: artworkUrl,
+                                tags: details.tags,
+                                ...(annotation && { annotation }),
+                                ...(modificationTime && { modificationTime }),
+                            },
+                        ],
+                        folderId: folderId,
+                    }),
+                });
+                if (viaURL && viaURL.status) {
+                    return viaURL.data;
+                } else {
+                    console.error("Eagle 返回(addFromURLs): ", viaURL);
+                }
+            } catch (e) {
+                console.error("addFromURLs(dataURL) 调用异常:", e);
+            }
+
+            console.error("Eagle 返回: ", data);
+            throw new Error("保存 GIF 至 Eagle 失败");
+        }
+        return data.data;
     }
 
     // 保存图片到 Eagle
@@ -822,10 +1116,17 @@ SOFTWARE.
                 targetFolderId = await createEagleFolder(details.illustTitle, artistFolder.id, artworkId);
             }
 
-            // 保存图片到 Eagle
-            await saveToEagle(details.originalUrls, targetFolderId, details, artworkId);
+            // 如果是动图（ugoira），先转换为 GIF 并保存
+            const isUgoira = details.illustType === 2 || details.illustType === "2";
+            if (isUgoira) {
+                await saveUgoiraAsGifToEagle(artworkId, targetFolderId, details);
+            } else {
+                await saveToEagle(details.originalUrls, targetFolderId, details, artworkId);
+            }
 
             const message = [
+                `✅ ${isUgoira ? "动图已转换为 GIF 并" : "图片已成功"}保存到 Eagle`,
+                "----------------------------",
                 folderInfo,
                 `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`,
                 "----------------------------",
@@ -837,8 +1138,6 @@ SOFTWARE.
                 `页数: ${details.pageCount}`,
                 `上传时间: ${details.uploadDate}`,
                 `标签: ${details.tags.join(", ")}`,
-                "----------------------------",
-                "✅ 图片已成功保存到 Eagle",
             ].join("\n");
 
             showMessage(message);
