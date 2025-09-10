@@ -1,5 +1,9 @@
 # Pixiv2Eagle
 
+> **New:** Convert Pixiv ugoira to GIF and save to Eagle.
+> 
+> **Conversion may take some time; please wait patiently.**
+
 A Tampermonkey script for saving Pixiv artworks to Eagle image management software.
 
 ## Features

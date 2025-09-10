@@ -1,5 +1,10 @@
 # Pixiv2Eagle
 
+> **新增：** 支持将 Pixiv 动图（ugoira）转换为 GIF 并保存到 Eagle。
+> 
+> **转换可能需要一些时间，请耐心等待。**
+
+
 一个用于将 Pixiv 艺术作品保存到 Eagle 图片管理软件的 Tampermonkey（油猴）脚本。
 
 ## 功能特点
