@@ -914,19 +914,6 @@ SOFTWARE.
         return blob;
     }
 
-    // 将 Blob 转为 base64（不含 data: 前缀）
-    async function blobToBase64(blob) {
-        // 使用 FileReader 转 dataURL 再提取 base64，避免大 Blob 手动拼接导致内存/性能问题
-        const dataURL = await new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.onerror = reject;
-            reader.readAsDataURL(blob);
-        });
-        const comma = dataURL.indexOf(",");
-        return dataURL.substring(comma + 1);
-    }
-
     async function blobToDataURL(blob) {
         return await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -936,154 +923,64 @@ SOFTWARE.
         });
     }
 
-    // 保存动图（转换后的 GIF）到 Eagle
-    async function saveUgoiraAsGifToEagle(artworkId, folderId, details) {
-        const gifBlob = await convertUgoiraToGifBlob(artworkId);
-        const [base64, dataURL] = await (async () => {
-            const du = await blobToDataURL(gifBlob);
-            const comma = du.indexOf(",");
-            return [du.substring(comma + 1), du];
-        })();
+    // 保存图片到 Eagle
+    async function saveToEagle(imageUrls, folderId, details, artworkId) {
+        async function getUgoiraUrl(artworkId) {
+            const gifBlob = await convertUgoiraToGifBlob(artworkId);
+            const [base64, dataURL] = await (async () => {
+                const du = await blobToDataURL(gifBlob);
+                const comma = du.indexOf(",");
+                return [du.substring(comma + 1), du];
+            })();
+            return dataURL;
+        }
+
+        const isUgoira = details.illustType === 2;
+        if (isUgoira) {
+            imageUrls = [await getUgoiraUrl(artworkId)];
+        }
 
         const baseTitle = details.illustTitle;
+        const isMultiPage = imageUrls.length > 1;
         const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
 
+        // 根据设置决定是否使用投稿时间
         const useUploadDate = getUseUploadDate();
         const modificationTime = useUploadDate ? new Date(details.uploadDate).getTime() : undefined;
+
+        // 根据设置决定是否保存描述
         const shouldSaveDescription = getSaveDescription();
         const annotation = shouldSaveDescription ? details.description : undefined;
 
-        let payload = {
-            items: [
-                {
-                    data: base64,
-                    ext: "gif",
-                    name: baseTitle,
-                    fileName: `${baseTitle}.gif`,
+        // 批量添加图片
+        const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+                items: imageUrls.map((url, index) => ({
+                    url,
+                    name: isMultiPage ? `${baseTitle}_${index}` : baseTitle,
                     website: artworkUrl,
                     tags: details.tags,
                     ...(annotation && { annotation }),
                     ...(modificationTime && { modificationTime }),
-                },
-            ],
-            folderId: folderId,
-        };
-
-        let data = await gmFetch("http://localhost:41595/api/item/addFromBase64", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-        });
-
-        // 如果失败，尝试 dataURL 兼容格式
-        if (!data || !data.status) {
-            // 尝试使用 dataURL 字段
-            try {
-                payload = {
-                    items: [
-                        {
-                            dataURL: dataURL,
-                            name: baseTitle,
-                            fileName: `${baseTitle}.gif`,
-                            website: artworkUrl,
-                            tags: details.tags,
-                            ...(annotation && { annotation }),
-                            ...(modificationTime && { modificationTime }),
-                        },
-                    ],
-                    folderId: folderId,
-                };
-                data = await gmFetch("http://localhost:41595/api/item/addFromBase64", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(payload),
-                });
-            } catch (e) {
-                console.error("addFromBase64(dataURL) 调用异常:", e);
-            }
-        }
-
-        if (!data || !data.status) {
-            // 再次回退：尝试通过 addFromURLs 使用 data:URL
-            try {
-                const viaURL = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        items: [
-                            {
-                                url: dataURL,
-                                name: baseTitle,
-                                website: artworkUrl,
-                                tags: details.tags,
-                                ...(annotation && { annotation }),
-                                ...(modificationTime && { modificationTime }),
-                            },
-                        ],
-                        folderId: folderId,
-                    }),
-                });
-                if (viaURL && viaURL.status) {
-                    return viaURL.data;
-                } else {
-                    console.error("Eagle 返回(addFromURLs): ", viaURL);
-                }
-            } catch (e) {
-                console.error("addFromURLs(dataURL) 调用异常:", e);
-            }
-
-            console.error("Eagle 返回: ", data);
-            throw new Error("保存 GIF 至 Eagle 失败");
-        }
-        return data.data;
-    }
-
-    // 保存图片到 Eagle
-    async function saveToEagle(imageUrls, folderId, details, artworkId) {
-        try {
-            const baseTitle = details.illustTitle;
-            const isMultiPage = imageUrls.length > 1;
-            const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
-
-            // 根据设置决定是否使用投稿时间
-            const useUploadDate = getUseUploadDate();
-            const modificationTime = useUploadDate ? new Date(details.uploadDate).getTime() : undefined;
-
-            // 根据设置决定是否保存描述
-            const shouldSaveDescription = getSaveDescription();
-            const annotation = shouldSaveDescription ? details.description : undefined;
-
-            // 批量添加图片
-            const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    items: imageUrls.map((url, index) => ({
-                        url: url,
-                        name: isMultiPage ? `${baseTitle}_${index}` : baseTitle,
-                        website: artworkUrl,
-                        tags: details.tags,
-                        ...(annotation && { annotation: annotation }), // 添加 annotation 字段
-                        ...(modificationTime && { modificationTime: modificationTime }),
+                    ...(!isUgoira && {
                         headers: {
                             referer: "https://www.pixiv.net/",
                         },
-                    })),
-                    folderId: folderId,
-                }),
-            });
+                    }),
+                })),
+                folderId,
+            }),
+        });
 
-            if (!data.status) {
-                throw new Error("保存图片失败");
-            }
-
-            return data.data;
-        } catch (error) {
-            console.error("保存图片失败:", error);
-            throw error;
+        if (!data.status) {
+            throw new Error("保存图片失败");
         }
+
+        return data.data;
     }
 
     // 保存当前作品到 Eagle
@@ -1118,11 +1015,7 @@ SOFTWARE.
 
             // 如果是动图（ugoira），先转换为 GIF 并保存
             const isUgoira = details.illustType === 2 || details.illustType === "2";
-            if (isUgoira) {
-                await saveUgoiraAsGifToEagle(artworkId, targetFolderId, details);
-            } else {
-                await saveToEagle(details.originalUrls, targetFolderId, details, artworkId);
-            }
+            await saveToEagle(details.originalUrls, targetFolderId, details, artworkId);
 
             const message = [
                 `✅ ${isUgoira ? "动图已转换为 GIF 并" : "图片已成功"}保存到 Eagle`,

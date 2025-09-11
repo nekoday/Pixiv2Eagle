@@ -1,6 +1,6 @@
 # Pixiv2Eagle
 
-> **新增：** 支持将 Pixiv 动图（ugoira）转换为 GIF 并保存到 Eagle。
+> ✨ **新增：** 支持将 Pixiv 动图（ugoira）转换为 GIF 并保存到 Eagle。
 > 
 > **转换可能需要一些时间，请耐心等待。**
 
