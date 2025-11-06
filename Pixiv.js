@@ -1057,6 +1057,18 @@ SOFTWARE.
         return null;
     }
 
+    // 从 artwork 信息获取画师信息
+    async function getArtistInfoFromArtwork(artworkId) {
+        const artworkInfo = await fetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`).then((r) => r.json());
+        if (artworkInfo && artworkInfo.body) {
+            return {
+                userId: artworkInfo.body.userId,
+                userName: artworkInfo.body.userName,
+            };
+        }
+        return null;
+    }
+
     // 更新 Eagle 文件夹名称
     async function updateFolderNameInEagle(folderId, newName) {
         await gmFetch("http://localhost:41595/api/folder/update", {
@@ -1104,7 +1116,8 @@ SOFTWARE.
         }
 
         // 通过 DOM 获取画师信息
-        let artistInfo = getArtistInfoFromDOM();
+        const artworkId = getArtworkId();
+        const artistInfo = await getArtistInfoFromArtwork(artworkId);
         if (!artistInfo) {
             showMessage("无法获取画师信息", true);
             return;
