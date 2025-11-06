@@ -52,8 +52,8 @@ SOFTWARE.
 
     // 常量定义
     const EAGLE_SAVE_BUTTON_ID = "eagle-save-button-wrapper";
-    const PIXIV_SECTION_CLASS = "sc-7709e4d9-0";
-    const PIXIV_ARTIST_DIV_CLASS = "sc-946c1cc3-1 lnPJtB";
+    const PIXIV_SECTION_CLASS = "sc-7709e4d9-0"; // deprecated
+    const PIXIV_ARTIST_DIV_CLASS = "sc-946c1cc3-1 lnPJtB"; // deprecated
 
     // 获取文件夹 ID
     function getFolderId() {
@@ -554,37 +554,6 @@ SOFTWARE.
                 clearInterval(intervalId);
             }
         }, 500);
-    }
-
-    // 等待目标 section 元素加载
-    function waitForElement(selector) {
-        return new Promise((resolve) => {
-            // 首先检查元素是否已经存在
-            const element = document.querySelector(selector);
-            if (element) {
-                return resolve(element);
-            }
-
-            // 如果元素不存在，设置观察器
-            const observer = new MutationObserver((mutations, obs) => {
-                const element = document.querySelector(selector);
-                if (element) {
-                    obs.disconnect();
-                    resolve(element);
-                }
-            });
-
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-            });
-
-            // 10 秒后超时
-            setTimeout(() => {
-                observer.disconnect();
-                resolve(null);
-            }, 10000);
-        });
     }
 
     // 创建 Pixiv 风格的按钮
@@ -1131,6 +1100,73 @@ SOFTWARE.
         }
     }
 
+    // 等待目标 section 元素加载
+    function waitForElement(selector) {
+        return new Promise((resolve) => {
+            // 首先检查元素是否已经存在
+            const element = document.querySelector(selector);
+            if (element) {
+                return resolve(element);
+            }
+
+            // 如果元素不存在，设置观察器
+            const observer = new MutationObserver((mutations, obs) => {
+                const element = document.querySelector(selector);
+                if (element) {
+                    obs.disconnect();
+                    resolve(element);
+                }
+            });
+
+            observer.observe(document.body, {
+                childList: true,
+                subtree: true,
+            });
+
+            // 10 秒后超时
+            setTimeout(() => {
+                observer.disconnect();
+                resolve(null);
+            }, 10000);
+        });
+    }
+
+    function waitForSectionWithin(parent, timeout = 10000) {
+        const getFirstSection = () => {
+            const children = parent.children ? Array.from(parent.children) : [];
+            const directChild = children.find((child) => child.tagName && child.tagName.toLowerCase() === "section");
+            if (directChild) {
+                return directChild;
+            }
+            return parent.querySelector("section");
+        };
+
+        const existing = getFirstSection();
+        if (existing) {
+            return Promise.resolve(existing);
+        }
+
+        return new Promise((resolve) => {
+            const observer = new MutationObserver((mutations, obs) => {
+                const section = getFirstSection();
+                if (section) {
+                    obs.disconnect();
+                    resolve(section);
+                }
+            });
+
+            observer.observe(parent, {
+                childList: true,
+                subtree: true,
+            });
+
+            setTimeout(() => {
+                observer.disconnect();
+                resolve(null);
+            }, timeout);
+        });
+    }
+
     // 主函数
     async function addButton() {
         // 移除旧按钮（如果存在）
@@ -1139,9 +1175,15 @@ SOFTWARE.
             oldWrapper.remove();
         }
 
-        // 等待目标 section 加载
-        const targetSection = await waitForElement(`section[class*="${PIXIV_SECTION_CLASS}"]`);
-        if (!targetSection) return; // 如果找不到目标 section，直接返回
+        // 等待 <main> 及其嵌套的 section 结构加载
+        const mainElement = await waitForElement("main");
+        if (!mainElement) return;
+
+        const outerSection = await waitForSectionWithin(mainElement);
+        if (!outerSection) return;
+
+        const targetSection = await waitForSectionWithin(outerSection);
+        if (!targetSection) return;
 
         // 检查按钮是否已经存在（双重检查，以防在等待过程中已添加）
         if (document.getElementById(EAGLE_SAVE_BUTTON_ID)) return;
