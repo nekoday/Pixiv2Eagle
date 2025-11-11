@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.0.5
+// @version         2.1.0
 
 // @author          nekoday
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -346,9 +346,10 @@ SOFTWARE.
 
             if (artistFolder) {
                 return {
-                    exists: true,
+                    existed: true,
                     id: artistFolder.id,
                     name: artistFolder.name,
+                    children: artistFolder.children,
                 };
             }
             return null;
@@ -393,9 +394,10 @@ SOFTWARE.
 
                 if (existingFolder) {
                     return {
-                        exists: true,
+                        existed: true,
                         id: existingFolder.id,
                         name: existingFolder.name,
+                        children: existingFolder.children,
                     };
                 }
                 return null;
@@ -465,8 +467,10 @@ SOFTWARE.
         try {
             const newFolderId = await createEagleFolder(folderName, parentId, `pid = ${artistId}`);
             return {
+                existed: false,
                 id: newFolderId,
                 name: artistName,
+                children: [],
             };
         } catch (error) {
             console.error("创建画师文件夹失败:", error);
@@ -481,6 +485,36 @@ SOFTWARE.
         if (found) return found;
         // 没找到则创建
         return await createArtistFolder(artistName, artistId, pixivFolderId);
+    }
+
+    // 查找系列文件夹
+    async function getSeriesFolder(artistFolder, artistId, seriesId, seriesName) {
+        const existingFolder = artistFolder.children.find((folder) => {
+            const description = folder.description || "";
+            const match = description.match(/^\/series\/(\d+)/);
+            return match && match[1] === seriesId;
+        });
+
+        if (existingFolder) {
+            return {
+                existed: true,
+                id: existingFolder.id,
+                name: existingFolder.name,
+                children: existingFolder.children,
+            };
+        }
+
+        const newSeriesFolderId = await createEagleFolder(
+            seriesName,
+            artistFolder.id,
+            `https://www.pixiv.net/user/${artistId}/series/${seriesId}`
+        );
+        return {
+            existed: false,
+            id: newSeriesFolderId,
+            name: seriesName,
+            children: [],
+        };
     }
 
     // 监听 URL 变化
@@ -729,6 +763,7 @@ SOFTWARE.
                 tags: processTags(basicInfo.body.tags.tags, basicInfo.body.isOriginal, basicInfo.body.aiType),
                 // 作品类型：0 插画、1 漫画、2 动图（ugoira）
                 illustType: basicInfo.body.illustType,
+                seriesNavData: basicInfo.body.seriesNavData,
             };
 
             return details;
@@ -904,6 +939,7 @@ SOFTWARE.
             return dataURL;
         }
 
+        // 如果是动图（ugoira），先转换为 GIF 并保存
         const isUgoira = details.illustType === 2;
         if (isUgoira) {
             imageUrls = [await getUgoiraUrl(artworkId)];
@@ -977,17 +1013,24 @@ SOFTWARE.
             const artistFolder = await getArtistFolder(folderId, details.userId, details.userName);
             let targetFolderId = artistFolder.id;
 
-            // 如果是多 P 作品且设置了创建子文件夹，则创建子文件夹
-            if (getCreateSubFolder() && details.pageCount > 1) {
-                targetFolderId = await createEagleFolder(details.illustTitle, artistFolder.id, artworkId);
+            // 创建漫画系列文件夹
+            if (details.illustType === 1 && details.seriesNavData) {
+                const seriesId = details.seriesNavData.seriesId;
+                const seriesTitle = details.seriesNavData.title;
+                const seriesFolder = await getSeriesFolder(artistFolder, details.userId, seriesId, seriesTitle);
+                targetFolderId = seriesFolder.id;
             }
 
-            // 如果是动图（ugoira），先转换为 GIF 并保存
-            const isUgoira = details.illustType === 2 || details.illustType === "2";
+            // 漫画作品，始终创建子文件夹
+            // 如果是多 P 作品且设置了创建子文件夹，则创建子文件夹
+            if (details.illustType === 1 || (getCreateSubFolder() && details.pageCount > 1)) {
+                targetFolderId = await createEagleFolder(details.illustTitle, targetFolderId, artworkId);
+            }
+
             await saveToEagle(details.originalUrls, targetFolderId, details, artworkId);
 
             const message = [
-                `✅ ${isUgoira ? "动图已转换为 GIF 并" : "图片已成功"}保存到 Eagle`,
+                `✅ ${details.illustType === 2 ? "动图已转换为 GIF 并" : "图片已成功"}保存到 Eagle`,
                 "----------------------------",
                 folderInfo,
                 `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`,
@@ -997,6 +1040,7 @@ SOFTWARE.
                 `作品ID: ${artworkId}`,
                 `作者: ${details.userName} (ID: ${details.userId})`,
                 `作品名称: ${details.illustTitle}`,
+                `作品类型： ${details.illustType === 2 ? "动图 (ugoira)" : details.illustType === 1 ? "漫画" : "插画"}`,
                 `页数: ${details.pageCount}`,
                 `上传时间: ${details.uploadDate}`,
                 `标签: ${details.tags.join(", ")}`,
