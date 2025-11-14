@@ -74,6 +74,14 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
   4. Newly created folders will automatically be set with the artist's name and a description containing the artist's ID
   5. All artworks will be saved in the corresponding artist's dedicated folder
 
+### Artwork Subfolders
+- Manga artworks (`illustType = 1`) or artworks that contain Pixiv series metadata always live inside a series folder under the artist folder, and each artwork gets its own subfolder named after the title; the folder description stores the Pixiv series URL so you can trace the source quickly.
+- For other artworks you can control the behavior via the Tampermonkey menu entry `🗂️ 切换：为多页作品创建子文件夹`, which cycles through **Off (关闭) → Multi-page (多页) → Always (始终)**:
+  - Off: Any illustrations go directly into the artist/series folder without creating subfolders.
+  - Multi-page: only artworks where Pixiv reports `pageCount > 1` will get a subfolder before the files are saved.
+  - Always: every artwork—including single-page illustrations and converted ugoira GIFs—receives a dedicated subfolder.
+- All files from the same Pixiv artwork (images or GIFs) reside in the same subfolder, keeping Eagle collections aligned with Pixiv series/chapters.
+
 ### Debug Mode
 - Debug mode can be enabled/disabled in the Tampermonkey menu
 - When enabled, detailed information about the saving process will be displayed
