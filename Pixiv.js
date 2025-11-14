@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.1.0
+// @version         2.2.0-a
 
 // @author          nekoday
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -123,14 +123,34 @@ SOFTWARE.
 
     // 切换是否为多 P 作品创建子文件夹
     function toggleCreateSubFolder() {
-        const currentMode = GM_getValue("createSubFolder", false);
-        GM_setValue("createSubFolder", !currentMode);
-        alert(`为多 P 作品创建子文件夹已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
+        const currentMode = getCreateSubFolder();
+        switch (currentMode) {
+            case "off":
+                GM_setValue("createSubFolder", "multi-page");
+                alert("✅ 仅为多页作品创建子文件夹");
+                break;
+            case "multi-page":
+                GM_setValue("createSubFolder", "always");
+                alert("✅ 为任意作品创建子文件夹");
+                break;
+            case "always":
+                GM_setValue("createSubFolder", "off");
+                alert("❌ 已关闭创建作品子文件夹功能");
+                break;
+            default:
+                GM_setValue("createSubFolder", "off");
+                alert("❌ 已关闭创建作品子文件夹功能");
+        }
     }
 
     // 获取是否为多 P 作品创建子文件夹
     function getCreateSubFolder() {
-        return GM_getValue("createSubFolder", false);
+        let currentMode = GM_getValue("createSubFolder", "off");
+        if (typeof currentMode === "boolean") {
+            currentMode = currentMode ? "multi-page" : "off";
+            GM_setValue("createSubFolder", currentMode);
+        }
+        return currentMode;
     }
 
     // 获取调试模式状态
@@ -1023,7 +1043,11 @@ SOFTWARE.
 
             // 漫画作品，始终创建子文件夹
             // 如果是多 P 作品且设置了创建子文件夹，则创建子文件夹
-            if (details.illustType === 1 || (getCreateSubFolder() && details.pageCount > 1)) {
+            if (
+                details.illustType === 1 ||
+                (getCreateSubFolder() === "multi-page" && details.pageCount > 1) ||
+                getCreateSubFolder() === "always"
+            ) {
                 targetFolderId = await createEagleFolder(details.illustTitle, targetFolderId, artworkId);
             }
 
