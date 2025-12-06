@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.2.1
+// @version         2.2.2-a
 
 // @author          nekoday
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -165,6 +165,18 @@ SOFTWARE.
         alert(`调试模式已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
     }
 
+    // 获取是否自动检测作品保存状态
+    function getAutoCheckSavedStatus() {
+        return GM_getValue("autoCheckSavedStatus", false);
+    }
+
+    // 切换自动检测作品保存状态
+    function toggleAutoCheckSavedStatus() {
+        const currentStatus = getAutoCheckSavedStatus();
+        GM_setValue("autoCheckSavedStatus", !currentStatus);
+        alert(`自动检测作品保存状态已${!currentStatus ? "开启" : "关闭"}`);
+    }
+
     // 设置画师文件夹匹配模板串
     function setArtistMatcher() {
         const template = prompt(
@@ -187,6 +199,7 @@ SOFTWARE.
     GM_registerMenuCommand("🕗 切换：保存作品描述", toggleSaveDescription);
     GM_registerMenuCommand("🗂️ 切换：为多页作品创建子文件夹", toggleCreateSubFolder);
     GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
+    GM_registerMenuCommand("🔎 切换：自动检测作品保存状态", toggleAutoCheckSavedStatus);
     GM_registerMenuCommand("🧪 切换：调试模式", toggleDebugMode);
     GM_registerMenuCommand("🧪 设置画师文件夹名称模板", setArtistMatcher);
 
@@ -334,6 +347,47 @@ SOFTWARE.
                 version: null,
             };
         }
+    }
+
+    // 查询 Eagle 中是否已保存指定作品
+    async function isArtworkSavedInEagle(artworkId, folderId) {
+        if (!folderId) return false;
+
+        const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
+        const limit = 200;
+
+        try {
+            let offset = 0;
+            let loopCount = 0;
+
+            while (loopCount < 100000) {
+                const params = new URLSearchParams({
+                    folders: folderId,
+                    limit: limit.toString(),
+                    offset: offset.toString(),
+                });
+
+                const data = await gmFetch(`http://localhost:41595/api/item/list?${params.toString()}`);
+                if (!data || !data.status) break;
+
+                const items = Array.isArray(data.data)
+                    ? data.data
+                    : Array.isArray(data.data?.items)
+                    ? data.data.items
+                    : [];
+
+                const matched = items.some((item) => item.url === artworkUrl);
+                if (matched) return true;
+
+                if (items.length < limit) break;
+                offset += items.length;
+                loopCount += 1;
+            }
+        } catch (error) {
+            console.error("检测作品保存状态失败:", error);
+        }
+
+        return false;
     }
 
     // 查找画师文件夹（不创建）
@@ -1235,6 +1289,36 @@ SOFTWARE.
         });
     }
 
+    // 自动检测 Eagle 中是否已有当前作品，并更新按钮文案
+    async function updateSaveButtonIfSaved(saveButton) {
+        if (!getAutoCheckSavedStatus() || !saveButton) return;
+
+        const artworkId = getArtworkId();
+        if (!artworkId) return;
+
+        try {
+            const eagleStatus = await checkEagle();
+            if (!eagleStatus.running) return;
+
+            // 仅在画师专属文件夹内检查是否已保存
+            const artistInfo = await getArtistInfoFromArtwork(artworkId);
+            if (!artistInfo) return;
+
+            const pixivFolderId = getFolderId();
+            const artistFolder = await findArtistFolder(pixivFolderId, artistInfo.userId);
+            if (!artistFolder) return;
+
+            const saved = await isArtworkSavedInEagle(artworkId, artistFolder.id);
+            if (saved) {
+                saveButton.textContent = "✅ 此作品已保存";
+            } else {
+                console.log(`未保存 | ID ${artworkId} | Artist ${artistFolder.name}`);
+            }
+        } catch (error) {
+            console.error("检测保存状态时出错:", error);
+        }
+    }
+
     // 主函数
     async function addButton() {
         // 移除旧按钮（如果存在）
@@ -1287,6 +1371,9 @@ SOFTWARE.
 
         // 将按钮添加到 section 的最后
         targetSection.appendChild(buttonWrapper);
+
+        // 自动检测是否已保存，已保存则更新按钮文本
+        updateSaveButtonIfSaved(saveButton);
     }
 
     const monitorConfig = [
