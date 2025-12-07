@@ -52,6 +52,7 @@ SOFTWARE.
 
     // 常量定义
     const EAGLE_SAVE_BUTTON_ID = "eagle-save-button-wrapper";
+    const EAGLE_OPEN_ITEM_BUTTON_ID = "eagle-open-artwork-button";
     const PIXIV_SECTION_CLASS = "sc-7709e4d9-0"; // deprecated
     const PIXIV_ARTIST_DIV_CLASS = "sc-946c1cc3-1 lnPJtB"; // deprecated
 
@@ -351,7 +352,9 @@ SOFTWARE.
 
     // 查询 Eagle 中是否已保存指定作品
     async function isArtworkSavedInEagle(artworkId, folderId) {
-        if (!folderId) return false;
+        if (!folderId) {
+            return { saved: false, itemId: null };
+        }
 
         const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
         const limit = 200;
@@ -376,8 +379,13 @@ SOFTWARE.
                     ? data.data.items
                     : [];
 
-                const matched = items.some((item) => item.url === artworkUrl);
-                if (matched) return true;
+                const matched = items.find((item) => item.url === artworkUrl);
+                if (matched) {
+                    return {
+                        saved: true,
+                        itemId: matched.id,
+                    };
+                }
 
                 if (items.length < limit) break;
                 offset += items.length;
@@ -387,7 +395,24 @@ SOFTWARE.
             console.error("检测作品保存状态失败:", error);
         }
 
-        return false;
+        return { saved: false, itemId: null };
+    }
+
+    // 在 Eagle 中打开指定作品
+    async function openArtworkInEagle(itemId) {
+        if (!itemId) {
+            showMessage("无法找到对应的 Eagle 作品 ID", true);
+            return;
+        }
+
+        const eagleStatus = await checkEagle();
+        if (!eagleStatus.running) {
+            showMessage("Eagle 未启动，请先启动 Eagle 应用！", true);
+            return;
+        }
+
+        const eagleUrl = `http://localhost:41595/item?id=${itemId}`;
+        window.location.href = eagleUrl;
     }
 
     // 查找画师文件夹（不创建）
@@ -1131,7 +1156,9 @@ SOFTWARE.
         }
     }
 
-    // 通过 DOM 获取画师 UID 和用户名
+    /**
+     * @deprecated 通过 DOM 获取画师 UID 和用户名
+     */
     function getArtistInfoFromDOM() {
         // 通过 div 的 class 查找画师信息
         const artistDiv = document.querySelector(`div.${PIXIV_ARTIST_DIV_CLASS.replace(/ /g, ".")}`);
@@ -1289,6 +1316,23 @@ SOFTWARE.
         });
     }
 
+    function attachOpenArtworkButton(saveButton, itemId) {
+        if (!itemId || !saveButton) return;
+
+        const wrapper = saveButton.parentElement;
+        if (!wrapper) return;
+
+        const clickHandler = () => openArtworkInEagle(itemId);
+
+        const openButton = createPixivStyledButton("🔍");
+        openButton.id = EAGLE_OPEN_ITEM_BUTTON_ID;
+        openButton.title = "在 Eagle 中打开此作品";
+        openButton.setAttribute("data-item-id", itemId);
+        openButton.onclick = clickHandler;
+
+        wrapper.insertBefore(openButton, saveButton.nextSibling);
+    }
+
     // 自动检测 Eagle 中是否已有当前作品，并更新按钮文案
     async function updateSaveButtonIfSaved(saveButton) {
         if (!getAutoCheckSavedStatus() || !saveButton) return;
@@ -1308,9 +1352,10 @@ SOFTWARE.
             const artistFolder = await findArtistFolder(pixivFolderId, artistInfo.userId);
             if (!artistFolder) return;
 
-            const saved = await isArtworkSavedInEagle(artworkId, artistFolder.id);
-            if (saved) {
+            const savedResult = await isArtworkSavedInEagle(artworkId, artistFolder.id);
+            if (savedResult.saved) {
                 saveButton.textContent = "✅ 此作品已保存";
+                attachOpenArtworkButton(saveButton, savedResult.itemId);
             } else {
                 console.log(`未保存 | ID ${artworkId} | Artist ${artistFolder.name}`);
             }
@@ -1355,6 +1400,7 @@ SOFTWARE.
 
         // 创建保存按钮
         const saveButton = createPixivStyledButton("保存到 Eagle");
+        saveButton.title = "将当前作品保存到 Eagle";
 
         // 添加保存按钮点击事件
         saveButton.addEventListener("click", saveCurrentArtwork);
