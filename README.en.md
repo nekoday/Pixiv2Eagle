@@ -15,6 +15,7 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
 - 🗂️ Option to create subfolder for multi-page artwork
 - 📝 Option to save artwork description to Eagle annotation
 - ⏰ Option to use artwork upload time as the addition date
+- 🔍 Option to auto-detect whether the current artwork is already saved and open the saved artwork with one click
 - 🔧 Configurable Pixiv folder ID
 - 🐛 Debug mode support
 - 🧪 (Experimental) Set artist folder names through custom templates
@@ -81,6 +82,13 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
   - Multi-page: only artworks where Pixiv reports `pageCount > 1` will get a subfolder before the files are saved.
   - Always: every artwork—including single-page illustrations and converted ugoira GIFs—receives a dedicated subfolder.
 - All files from the same Pixiv artwork (images or GIFs) reside in the same subfolder, keeping Eagle collections aligned with Pixiv series/chapters.
+
+### Saved Artwork Detection (optional)
+- Toggle via the Tampermonkey menu `🔎 切换：自动检测作品保存状态`.
+- Flow: fetch current artwork info → locate the artist folder; if the artwork belongs to a Pixiv series, move into the matching series folder, otherwise stay in the artist folder.
+- First list items in the current folder to match by artwork link; if no hit, traverse its child folders—when a child folder description equals the artwork ID, it is treated as the saved location.
+- When a saved item is found, the button text changes to “已保存” and a “🔍” button appears.
+- Note: A large number of artworks may cause performance issues.
 
 ### Debug Mode
 - Debug mode can be enabled/disabled in the Tampermonkey menu
