@@ -1403,7 +1403,7 @@ SOFTWARE.
     }
 
     // 等待目标 section 元素加载
-    function waitForElement(selector) {
+    function waitForElement(selector, timeout = 10000) {
         return new Promise((resolve) => {
             // 首先检查元素是否已经存在
             const element = document.querySelector(selector);
@@ -1425,11 +1425,11 @@ SOFTWARE.
                 subtree: true,
             });
 
-            // 10 秒后超时
+            // 超时
             setTimeout(() => {
                 observer.disconnect();
                 resolve(null);
-            }, 10000);
+            }, timeout);
         });
     }
 
@@ -2224,6 +2224,217 @@ SOFTWARE.
         }, 300);
     }
 
+    let currentRecObserver = null;
+    let isRecAreaInitializing = false;
+
+    // 在推荐区域标记已保存作品
+    async function markSavedInRecommendationArea() {
+        // 如果正在初始化，直接返回，避免重复执行
+        if (isRecAreaInitializing) return;
+        isRecAreaInitializing = true;
+
+        try {
+            // 清理旧的 Observer
+            if (currentRecObserver) {
+                currentRecObserver.disconnect();
+                currentRecObserver = null;
+            }
+            // 清理旧的 Timer (如果有)
+            if (window.recScanTimer) {
+                clearInterval(window.recScanTimer);
+                window.recScanTimer = null;
+            }
+
+            console.log("[Pixiv2Eagle] 开始监控推荐区域 (增强版)...");
+
+            // 1. 构建 Eagle 索引 (ArtistUID -> { folderId, savedPids: Set<string> })
+            const eagleIndex = new Map(); 
+
+            const pixivFolderId = getFolderId();
+            if (!pixivFolderId) {
+                console.log("[Pixiv2Eagle] 未设置 Pixiv 文件夹 ID，跳过推荐区域标记");
+                return;
+            }
+
+            try {
+                const folderList = await gmFetch("http://localhost:41595/api/folder/list");
+                if (folderList.status && Array.isArray(folderList.data)) {
+                    const findFolder = (folders, id) => {
+                        for (const f of folders) {
+                            if (f.id === id) return f;
+                            if (f.children) {
+                                const res = findFolder(f.children, id);
+                                if (res) return res;
+                            }
+                        }
+                        return null;
+                    };
+                    const root = findFolder(folderList.data, pixivFolderId);
+                    
+                    if (root && root.children) {
+                        for (const artistFolder of root.children) {
+                            const desc = artistFolder.description || "";
+                            const match = desc.match(/pid\s*=\s*(\d+)/);
+                            if (match) {
+                                const artistUid = match[1];
+                                const pids = new Set();
+                                if (artistFolder.children) {
+                                    for (const sub of artistFolder.children) {
+                                        if (sub.description && /^\d+$/.test(sub.description.trim())) {
+                                            pids.add(sub.description.trim());
+                                        }
+                                    }
+                                }
+                                eagleIndex.set(artistUid, { id: artistFolder.id, pids });
+                            }
+                        }
+                    }
+                    console.log(`[Pixiv2Eagle] Eagle 索引构建完成，包含 ${eagleIndex.size} 位画师`);
+                }
+            } catch (e) {
+                console.error("[Pixiv2Eagle] 构建 Eagle 索引失败:", e);
+                return;
+            }
+
+            // 2. 处理单个 LI 节点的函数
+            const processLi = (li) => {
+                if (li.dataset.eagleChecked) return;
+                li.dataset.eagleChecked = "1";
+
+                // 提取作品 PID
+                // 优先使用用户指定的类名查找链接，更精准
+                let titleLink = li.querySelector('a.sc-fab8f26d-6');
+                if (!titleLink) titleLink = li.querySelector('a[href*="/artworks/"]'); // 回退
+                
+                if (!titleLink) return;
+                const pidMatch = titleLink.getAttribute("href").match(/\/artworks\/(\d+)/);
+                if (!pidMatch) return;
+                const pid = pidMatch[1];
+
+                // 提取画师 UID
+                // 优先使用用户指定的类名查找链接
+                let artistLink = li.querySelector('a.sc-fbe982d0-2');
+                if (!artistLink) artistLink = li.querySelector('a[href*="/users/"]'); // 回退
+
+                if (!artistLink) return;
+                const uidMatch = artistLink.getAttribute("href").match(/\/users\/(\d+)/);
+                if (!uidMatch) return;
+                const uid = uidMatch[1];
+
+                // 检查 Eagle 索引
+                const artistData = eagleIndex.get(uid);
+                if (!artistData) return;
+
+                // 检查是否已保存
+                if (artistData.pids.has(pid)) {
+                    console.log(`[Pixiv2Eagle] 推荐区域发现已保存作品: ${pid} (画师 ${uid})`);
+                    addBadge(li, pid);
+                }
+            };
+
+            // 3. 添加标记函数
+            const addBadge = (li, pid) => {
+                // 寻找缩略图容器
+                // 规则：<div radius="4" class="sc-f44a0b30-9 cvPXKv">
+                let target = li.querySelector('div.sc-f44a0b30-9.cvPXKv');
+                if (!target) target = li.querySelector('div.sc-f44a0b30-9');
+                
+                // 备选容器：<div class="sc-fab8f26d-3 etVILu">
+                // 注意：etVILu 可能是 li 的直接子元素或者更上层，但这里我们在 li 内部找
+                if (!target) target = li.querySelector('div.sc-fab8f26d-3.etVILu');
+                if (!target) target = li.querySelector('div.sc-fab8f26d-3');
+
+                // 如果还是没找到，尝试找图片容器
+                if (!target) {
+                    const img = li.querySelector('img');
+                    if (img) target = img.parentElement;
+                }
+
+                if (!target) return;
+
+                if (target.querySelector('.eagle-saved-badge')) return;
+
+                const badge = document.createElement('span');
+                badge.className = 'eagle-saved-badge';
+                badge.textContent = '✅';
+                badge.setAttribute('aria-hidden', 'true');
+                badge.style.position = 'absolute';
+                badge.style.left = '6px';
+                badge.style.bottom = '6px';
+                badge.style.zIndex = '10';
+                badge.style.fontSize = '14px';
+                badge.style.lineHeight = '1';
+                badge.style.pointerEvents = 'none';
+                badge.style.backgroundColor = 'rgba(255,255,255,0.95)';
+                badge.style.padding = '2px 4px';
+                badge.style.borderRadius = '4px';
+                badge.style.fontWeight = 'bold';
+                
+                const style = window.getComputedStyle(target);
+                if (style.position === 'static') {
+                    target.style.position = 'relative';
+                }
+                target.appendChild(badge);
+            };
+
+            // 4. 扫描逻辑
+            const scan = () => {
+                let lis = [];
+                
+                // 方案 A: 查找 Section (宽松匹配)
+                const section = document.querySelector('section[class*="sc-79c00fd3-0"]');
+                if (section) {
+                    lis = Array.from(section.querySelectorAll('li'));
+                } 
+                
+                // 方案 B: 如果没找到 Section，直接查找符合特征的 LI
+                // 特征：包含 class 为 sc-fab8f26d-6 的链接 (作品链接)
+                if (!lis || lis.length === 0) {
+                    const links = document.querySelectorAll('a[class*="sc-fab8f26d-6"]');
+                    if (links.length > 0) {
+                        const liSet = new Set();
+                        links.forEach(a => {
+                            const li = a.closest('li');
+                            if (li) liSet.add(li);
+                        });
+                        lis = Array.from(liSet);
+                    }
+                }
+
+                if (lis.length > 0) {
+                    lis.forEach(processLi);
+                }
+            };
+
+            // 5. 启动 Observer 和 Timer
+            const observer = new MutationObserver((mutations) => {
+                let shouldScan = false;
+                for (const mut of mutations) {
+                    if (mut.addedNodes.length > 0) {
+                        shouldScan = true;
+                        break;
+                    }
+                }
+                if (shouldScan) scan();
+            });
+
+            const targetRoot = document.querySelector('main') || document.body;
+            observer.observe(targetRoot, { childList: true, subtree: true });
+            currentRecObserver = observer;
+
+            // 额外添加定时器，防止 Observer 漏掉或加载延迟
+            window.recScanTimer = setInterval(scan, 2000);
+
+            // 初始扫描
+            scan();
+
+        } catch (err) {
+            console.error("[Pixiv2Eagle] 推荐区域监控出错:", err);
+        } finally {
+            isRecAreaInitializing = false;
+        }
+    }
+
     // 主函数
     async function addButton() {
         // 移除旧按钮（如果存在）
@@ -2286,7 +2497,10 @@ SOFTWARE.
         {
             urlSuffix: "/artworks",
             observeID: EAGLE_SAVE_BUTTON_ID,
-            handler: addButton,
+            handler: () => {
+                addButton();
+                markSavedInRecommendationArea();
+            },
         },
         {
             urlSuffix: "/user",
