@@ -154,6 +154,18 @@ SOFTWARE.
         return currentMode;
     }
 
+    // 获取是否按类型保存
+    function getSaveByType() {
+        return GM_getValue("saveByType", false);
+    }
+
+    // 切换按类型保存
+    function toggleSaveByType() {
+        const currentMode = getSaveByType();
+        GM_setValue("saveByType", !currentMode);
+        alert(`按类型保存已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
+    }
+
     // 获取调试模式状态
     function getDebugMode() {
         return GM_getValue("debugMode", false);
@@ -199,6 +211,7 @@ SOFTWARE.
     GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", toggleUseUploadDate);
     GM_registerMenuCommand("🕗 切换：保存作品描述", toggleSaveDescription);
     GM_registerMenuCommand("🗂️ 切换：为多页作品创建子文件夹", toggleCreateSubFolder);
+    GM_registerMenuCommand("🗂️ 切换：按类型保存", toggleSaveByType);
     GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
     GM_registerMenuCommand("🔎 切换：自动检测作品保存状态", toggleAutoCheckSavedStatus);
     GM_registerMenuCommand("🧪 切换：调试模式", toggleDebugMode);
@@ -594,6 +607,33 @@ SOFTWARE.
         return await createArtistFolder(artistName, artistId, pixivFolderId);
     }
 
+    // 获取类型文件夹信息
+    function getTypeFolderInfo(illustType) {
+        // illustType: 0=illust, 1=manga, 2=ugoira
+        // 映射: 0,2 -> 插画 (illustrations), 1 -> 漫画 (manga)
+        if (illustType === 1) {
+            return { name: "漫画", description: "manga" };
+        } else {
+            // 默认为插画 (包括 ugoira)
+            return { name: "插画", description: "illustrations" };
+        }
+        // 小说暂不支持，若支持则为 novels
+    }
+
+    // 查找或创建类型文件夹
+    async function getOrCreateTypeFolder(artistFolder, typeInfo) {
+        if (!artistFolder || !artistFolder.children) return null;
+        
+        let typeFolder = artistFolder.children.find(c => c.description === typeInfo.description);
+        if (!typeFolder) {
+            const newId = await createEagleFolder(typeInfo.name, artistFolder.id, typeInfo.description);
+            typeFolder = { id: newId, name: typeInfo.name, description: typeInfo.description, children: [] };
+            // 更新本地缓存的结构
+            artistFolder.children.push(typeFolder);
+        }
+        return typeFolder;
+    }
+
     // 查找系列文件夹
     async function getSeriesFolder(artistFolder, artistId, seriesId, seriesName) {
         const existingFolder = artistFolder.children.find((folder) => {
@@ -637,17 +677,51 @@ SOFTWARE.
 
             // 默认在画师文件夹检查，如有系列或当前为系列页面则进入系列文件夹
             let currentFolder = artistFolder;
+            
+            // 如果开启了按类型保存，或者为了兼容性，检查类型文件夹
+            // 注意：这里我们不强制切换 currentFolder，而是增加搜索路径
+            // 但为了保持逻辑简单，我们先尝试定位到最具体的文件夹
+            
+            // 尝试定位系列文件夹
             if (details.seriesNavData || isSeriesPage) {
                 const seriesId = details.seriesNavData?.seriesId || 
                     (location.pathname.match(/\/series\/(\d+)/) || [])[1];
                 if (seriesId) {
-                    const seriesFolder = findSeriesFolderInArtist(
-                        artistFolder,
-                        details.userId,
-                        seriesId
-                    );
+                    // 1. 在画师根目录下找系列
+                    let seriesFolder = findSeriesFolderInArtist(artistFolder, details.userId, seriesId);
+                    
+                    // 2. 如果没找到，且可能在类型文件夹下（如“漫画”文件夹）
+                    if (!seriesFolder && artistFolder.children) {
+                        const typeFolders = artistFolder.children.filter(c => ['illustrations', 'manga', 'novels'].includes(c.description));
+                        for (const tf of typeFolders) {
+                            seriesFolder = findSeriesFolderInArtist(tf, details.userId, seriesId);
+                            if (seriesFolder) break;
+                        }
+                    }
+                    
                     if (seriesFolder) {
                         currentFolder = seriesFolder;
+                    }
+                }
+            } else {
+                // 如果不是系列，可能是单幅插画，检查是否在类型文件夹中
+                // 优先检查类型文件夹
+                if (artistFolder.children) {
+                    const typeInfo = getTypeFolderInfo(details.illustType);
+                    const typeFolder = artistFolder.children.find(c => c.description === typeInfo.description);
+                    if (typeFolder) {
+                        // 如果找到了类型文件夹，我们应该检查它里面的 items
+                        // 但我们也应该检查画师根目录，以防旧数据
+                        // 这里我们暂时只切换 currentFolder 如果它确实包含该作品?
+                        // 不，isArtworkSavedInEagle 只检查一个文件夹。
+                        // 我们需要更灵活的检查。
+                        
+                        // 策略：先检查类型文件夹，再检查画师文件夹
+                        const savedInType = await isArtworkSavedInEagle(artworkId, typeFolder.id);
+                        if (savedInType.saved) {
+                            return { folder: typeFolder, itemId: savedInType.itemId };
+                        }
+                        // 如果没在类型文件夹找到，继续使用 artistFolder (currentFolder) 进行后续检查
                     }
                 }
             }
@@ -1179,12 +1253,23 @@ SOFTWARE.
             // 检查或创建画师专属文件夹
             const artistFolder = await getArtistFolder(folderId, details.userId, details.userName);
             let targetFolderId = artistFolder.id;
+            let parentFolderObj = artistFolder; // 用于传递给 getSeriesFolder
+
+            // 处理按类型保存
+            if (getSaveByType()) {
+                const typeInfo = getTypeFolderInfo(details.illustType);
+                const typeFolder = await getOrCreateTypeFolder(artistFolder, typeInfo);
+                if (typeFolder) {
+                    targetFolderId = typeFolder.id;
+                    parentFolderObj = typeFolder;
+                }
+            }
 
             // 创建漫画系列文件夹
             if (details.illustType === 1 && details.seriesNavData) {
                 const seriesId = details.seriesNavData.seriesId;
                 const seriesTitle = details.seriesNavData.title;
-                const seriesFolder = await getSeriesFolder(artistFolder, details.userId, seriesId, seriesTitle);
+                const seriesFolder = await getSeriesFolder(parentFolderObj, details.userId, seriesId, seriesTitle);
                 targetFolderId = seriesFolder.id;
             }
 
@@ -1622,8 +1707,20 @@ SOFTWARE.
             log('找到画师文件夹', artistFolder.id, '开始拉取 items');
             console.log('[Pixiv2Eagle] 找到画师文件夹:', artistFolder.id, '名称:', artistFolder.name);
             const items = await getAllEagleItemsInFolder(artistFolder.id);
+            
+            // 如果开启了按类型保存，还需要拉取类型文件夹中的 items
+            if (artistFolder.children) {
+                const typeFolders = artistFolder.children.filter(c => ['illustrations', 'manga', 'novels'].includes(c.description));
+                for (const tf of typeFolders) {
+                    const typeItems = await getAllEagleItemsInFolder(tf.id);
+                    if (typeItems && typeItems.length) {
+                        items.push(...typeItems);
+                    }
+                }
+            }
+
             const urlSet = new Set((items || []).map((it) => it.url));
-            console.log('[Pixiv2Eagle] 画师文件夹中 items 数量:', items ? items.length : 0);
+            console.log('[Pixiv2Eagle] 画师文件夹(含类型子文件夹)中 items 数量:', items ? items.length : 0);
 
             // 依据规则：
             // - 画师文件夹的 description 中含有 `pid = {artistId}` 用于识别画师（见 findArtistFolder）
@@ -1660,7 +1757,18 @@ SOFTWARE.
                             console.log('[Pixiv2Eagle] 系列页面但无法重新获取画师文件夹');
                         } else {
                             console.log('[Pixiv2Eagle] 已重新获取画师文件夹，查找系列文件夹');
-                            const seriesFolder = findSeriesFolderInArtist(updatedArtistFolder, artistId, seriesId);
+                            // 1. 在画师根目录下找系列
+                            let seriesFolder = findSeriesFolderInArtist(updatedArtistFolder, artistId, seriesId);
+                            
+                            // 2. 如果没找到，且可能在类型文件夹下（如“漫画”文件夹）
+                            if (!seriesFolder && updatedArtistFolder.children) {
+                                const typeFolders = updatedArtistFolder.children.filter(c => ['illustrations', 'manga', 'novels'].includes(c.description));
+                                for (const tf of typeFolders) {
+                                    seriesFolder = findSeriesFolderInArtist(tf, artistId, seriesId);
+                                    if (seriesFolder) break;
+                                }
+                            }
+
                             if (seriesFolder) {
                                 console.log('[Pixiv2Eagle] 找到系列文件夹:', seriesFolder.id, '，名称:', seriesFolder.name);
                                 log('在系列页面找到对应的 Eagle 系列文件夹', seriesFolder.id, '，将递归检查其 items 与子文件夹描述');
