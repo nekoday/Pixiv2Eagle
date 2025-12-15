@@ -2226,35 +2226,21 @@ SOFTWARE.
 
     let currentRecObserver = null;
     let isRecAreaInitializing = false;
+    let currentRecUrl = ""; // 记录当前监控的 URL，防止重复初始化
 
-    // 在推荐区域标记已保存作品
-    async function markSavedInRecommendationArea() {
-        // 如果正在初始化，直接返回，避免重复执行
-        if (isRecAreaInitializing) return;
-        isRecAreaInitializing = true;
+    let globalEagleIndex = null;
+    let eagleIndexLoadingPromise = null;
 
-        try {
-            // 清理旧的 Observer
-            if (currentRecObserver) {
-                currentRecObserver.disconnect();
-                currentRecObserver = null;
-            }
-            // 清理旧的 Timer (如果有)
-            if (window.recScanTimer) {
-                clearInterval(window.recScanTimer);
-                window.recScanTimer = null;
-            }
+    // 异步构建 Eagle 索引 (单例模式)
+    async function ensureEagleIndex() {
+        if (globalEagleIndex) return globalEagleIndex;
+        if (eagleIndexLoadingPromise) return eagleIndexLoadingPromise;
 
-            console.log("[Pixiv2Eagle] 开始监控推荐区域 (增强版)...");
-
-            // 1. 构建 Eagle 索引 (ArtistUID -> { folderId, savedPids: Set<string> })
-            const eagleIndex = new Map(); 
-
+        console.log("[Pixiv2Eagle] 正在构建全局 Eagle 索引...");
+        eagleIndexLoadingPromise = (async () => {
+            const index = new Map();
             const pixivFolderId = getFolderId();
-            if (!pixivFolderId) {
-                console.log("[Pixiv2Eagle] 未设置 Pixiv 文件夹 ID，跳过推荐区域标记");
-                return;
-            }
+            if (!pixivFolderId) return index;
 
             try {
                 const folderList = await gmFetch("http://localhost:41595/api/folder/list");
@@ -2278,81 +2264,180 @@ SOFTWARE.
                             if (match) {
                                 const artistUid = match[1];
                                 const pids = new Set();
-                                if (artistFolder.children) {
-                                    for (const sub of artistFolder.children) {
-                                        if (sub.description && /^\d+$/.test(sub.description.trim())) {
-                                            pids.add(sub.description.trim());
+                                
+                                // 递归遍历所有子孙节点查找 PID (支持类型文件夹、系列文件夹等嵌套结构)
+                                const traverse = (nodes) => {
+                                    for (const node of nodes) {
+                                        const subDesc = (node.description || "").trim();
+                                        // 只要备注是纯数字，就认为是作品 PID
+                                        if (subDesc && /^\d+$/.test(subDesc)) {
+                                            pids.add(subDesc);
+                                        }
+                                        // 继续递归子文件夹
+                                        if (node.children && node.children.length > 0) {
+                                            traverse(node.children);
                                         }
                                     }
+                                };
+
+                                if (artistFolder.children) {
+                                    traverse(artistFolder.children);
                                 }
-                                eagleIndex.set(artistUid, { id: artistFolder.id, pids });
+                                index.set(artistUid, { id: artistFolder.id, pids });
                             }
                         }
                     }
-                    console.log(`[Pixiv2Eagle] Eagle 索引构建完成，包含 ${eagleIndex.size} 位画师`);
+                    console.log(`[Pixiv2Eagle] 全局 Eagle 索引构建完成，包含 ${index.size} 位画师`);
                 }
             } catch (e) {
                 console.error("[Pixiv2Eagle] 构建 Eagle 索引失败:", e);
-                return;
             }
+            return index;
+        })();
+
+        try {
+            globalEagleIndex = await eagleIndexLoadingPromise;
+        } catch (e) {
+            console.error(e);
+            eagleIndexLoadingPromise = null; // 允许重试
+        }
+        return globalEagleIndex;
+    }
+
+    // 在推荐区域标记已保存作品
+    async function markSavedInRecommendationArea() {
+        // 如果正在初始化，直接返回，避免重复执行
+        if (isRecAreaInitializing) return;
+        
+        // 如果当前 URL 已经监控过，且 Observer 还在运行，则不重复初始化
+        // 注意：Pixiv 是 SPA，URL 变化时页面内容可能重置，所以通常需要重新 attach
+        // 但如果 URL 没变（例如只是参数变化或重复触发），则跳过
+        if (currentRecUrl === location.href && currentRecObserver) {
+            // console.log("[Pixiv2Eagle] 当前 URL 已在监控推荐区域，跳过重复初始化");
+            return;
+        }
+
+        isRecAreaInitializing = true;
+        currentRecUrl = location.href;
+
+        try {
+            // 清理旧的 Observer
+            if (currentRecObserver) {
+                currentRecObserver.disconnect();
+                currentRecObserver = null;
+            }
+            // 清理旧的 Timer
+            if (window.recScanTimer) {
+                clearInterval(window.recScanTimer);
+                window.recScanTimer = null;
+            }
+            // 清理旧的 Pending Timer
+            if (window.recPendingTimer) {
+                clearInterval(window.recPendingTimer);
+                window.recPendingTimer = null;
+            }
+
+            console.log("[Pixiv2Eagle] 开始监控推荐区域 (全局索引版)...");
+
+            // 立即触发索引构建，但不阻塞后续的 Observer 设置
+            ensureEagleIndex();
+
+            // 待重试队列 (Set<HTMLElement>)
+            const pendingLis = new Set();
 
             // 2. 处理单个 LI 节点的函数
             const processLi = (li) => {
-                if (li.dataset.eagleChecked) return;
-                li.dataset.eagleChecked = "1";
+                if (li.dataset.eagleChecked) {
+                    pendingLis.delete(li); // 已完成，移出队列
+                    return;
+                }
 
                 // 提取作品 PID
-                // 优先使用用户指定的类名查找链接，更精准
                 let titleLink = li.querySelector('a.sc-fab8f26d-6');
-                if (!titleLink) titleLink = li.querySelector('a[href*="/artworks/"]'); // 回退
+                if (!titleLink) titleLink = li.querySelector('a[href*="/artworks/"]');
                 
-                if (!titleLink) return;
+                if (!titleLink) {
+                    pendingLis.add(li); // 链接未加载，加入重试队列
+                    return; 
+                }
                 const pidMatch = titleLink.getAttribute("href").match(/\/artworks\/(\d+)/);
-                if (!pidMatch) return;
+                if (!pidMatch) {
+                    pendingLis.add(li);
+                    return;
+                }
                 const pid = pidMatch[1];
 
                 // 提取画师 UID
-                // 优先使用用户指定的类名查找链接
                 let artistLink = li.querySelector('a.sc-fbe982d0-2');
-                if (!artistLink) artistLink = li.querySelector('a[href*="/users/"]'); // 回退
+                if (!artistLink) artistLink = li.querySelector('a[href*="/users/"]');
 
-                if (!artistLink) return;
+                if (!artistLink) {
+                    pendingLis.add(li); // 链接未加载，加入重试队列
+                    return; 
+                }
                 const uidMatch = artistLink.getAttribute("href").match(/\/users\/(\d+)/);
-                if (!uidMatch) return;
+                if (!uidMatch) {
+                    pendingLis.add(li);
+                    return;
+                }
                 const uid = uidMatch[1];
 
-                // 检查 Eagle 索引
-                const artistData = eagleIndex.get(uid);
-                if (!artistData) return;
+                // 确保索引已就绪
+                if (!globalEagleIndex) {
+                    pendingLis.add(li); // 索引未就绪，加入重试队列
+                    return;
+                }
 
-                // 检查是否已保存
+                // 检查 Eagle 索引
+                const artistData = globalEagleIndex.get(uid);
+                
+                // 情况 1: 画师不在 Eagle 中 -> 肯定未保存 -> 标记为已检查
+                if (!artistData) {
+                    console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 不在 Eagle 中 -> 未保存`);
+                    li.dataset.eagleChecked = "1";
+                    pendingLis.delete(li);
+                    return;
+                }
+
+                // 情况 2: 画师在 Eagle 中，检查作品 PID
                 if (artistData.pids.has(pid)) {
-                    console.log(`[Pixiv2Eagle] 推荐区域发现已保存作品: ${pid} (画师 ${uid})`);
-                    addBadge(li, pid);
+                    const success = addBadge(li, pid);
+                    if (success) {
+                        li.dataset.eagleChecked = "1"; // 标记成功才设为 checked
+                        pendingLis.delete(li);
+                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记成功`);
+                    } else {
+                        // 标记失败（如找不到容器），加入重试队列
+                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记失败 (找不到容器)，加入重试`);
+                        pendingLis.add(li);
+                    }
+                } else {
+                    // 情况 3: 作品未保存 -> 标记为已检查
+                    console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 在 Eagle 中，但作品未保存`);
+                    li.dataset.eagleChecked = "1";
+                    pendingLis.delete(li);
                 }
             };
 
             // 3. 添加标记函数
             const addBadge = (li, pid) => {
                 // 寻找缩略图容器
-                // 规则：<div radius="4" class="sc-f44a0b30-9 cvPXKv">
                 let target = li.querySelector('div.sc-f44a0b30-9.cvPXKv');
                 if (!target) target = li.querySelector('div.sc-f44a0b30-9');
                 
-                // 备选容器：<div class="sc-fab8f26d-3 etVILu">
-                // 注意：etVILu 可能是 li 的直接子元素或者更上层，但这里我们在 li 内部找
+                // 备选容器
                 if (!target) target = li.querySelector('div.sc-fab8f26d-3.etVILu');
                 if (!target) target = li.querySelector('div.sc-fab8f26d-3');
 
-                // 如果还是没找到，尝试找图片容器
+                // 图片容器回退
                 if (!target) {
                     const img = li.querySelector('img');
                     if (img) target = img.parentElement;
                 }
 
-                if (!target) return;
+                if (!target) return false;
 
-                if (target.querySelector('.eagle-saved-badge')) return;
+                if (target.querySelector('.eagle-saved-badge')) return true;
 
                 const badge = document.createElement('span');
                 badge.className = 'eagle-saved-badge';
@@ -2375,20 +2460,23 @@ SOFTWARE.
                     target.style.position = 'relative';
                 }
                 target.appendChild(badge);
+                return true;
             };
 
             // 4. 扫描逻辑
             const scan = () => {
+                // 如果索引还没好，先不处理，等待下一次 Timer
+                if (!globalEagleIndex) return;
+
                 let lis = [];
                 
-                // 方案 A: 查找 Section (宽松匹配)
+                // 方案 A: 查找 Section
                 const section = document.querySelector('section[class*="sc-79c00fd3-0"]');
                 if (section) {
                     lis = Array.from(section.querySelectorAll('li'));
                 } 
                 
-                // 方案 B: 如果没找到 Section，直接查找符合特征的 LI
-                // 特征：包含 class 为 sc-fab8f26d-6 的链接 (作品链接)
+                // 方案 B: 回退查找
                 if (!lis || lis.length === 0) {
                     const links = document.querySelectorAll('a[class*="sc-fab8f26d-6"]');
                     if (links.length > 0) {
@@ -2402,6 +2490,7 @@ SOFTWARE.
                 }
 
                 if (lis.length > 0) {
+                    // console.log(`[Pixiv2Eagle] 扫描发现 ${lis.length} 个条目`);
                     lis.forEach(processLi);
                 }
             };
@@ -2415,17 +2504,30 @@ SOFTWARE.
                         break;
                     }
                 }
-                if (shouldScan) scan();
+                if (shouldScan) {
+                    console.log("[Pixiv2Eagle] 推荐区域检测到新内容，触发扫描...");
+                    scan();
+                }
             });
 
             const targetRoot = document.querySelector('main') || document.body;
             observer.observe(targetRoot, { childList: true, subtree: true });
             currentRecObserver = observer;
 
-            // 额外添加定时器，防止 Observer 漏掉或加载延迟
+            // 主定时器：扫描新元素 (2秒一次)
             window.recScanTimer = setInterval(scan, 2000);
 
-            // 初始扫描
+            // 重试定时器：高频扫描待处理队列 (200毫秒一次)
+            window.recPendingTimer = setInterval(() => {
+                if (pendingLis.size > 0) {
+                    // console.log(`[Pixiv2Eagle] 重试 ${pendingLis.size} 个待处理条目...`);
+                    // 复制一份进行遍历，避免遍历时修改 Set 导致问题
+                    const items = Array.from(pendingLis);
+                    items.forEach(processLi);
+                }
+            }, 200);
+
+            // 初始尝试
             scan();
 
         } catch (err) {
@@ -2512,6 +2614,10 @@ SOFTWARE.
     // 启动脚本
     try {
         console.log('[Pixiv2Eagle] 脚本已启动，当前URL:', location.pathname);
+        
+        // 立即开始构建全局索引
+        ensureEagleIndex();
+
         for (const monitorInfo of monitorConfig) {
             if (location.pathname.includes(monitorInfo.urlSuffix)) {
                 console.log('[Pixiv2Eagle] 初始加载时触发处理器:', monitorInfo.urlSuffix);
