@@ -2152,11 +2152,14 @@ SOFTWARE.
 
                 let lis = [];
                 
-                // 方案 A: 查找 Section
-                const section = document.querySelector('section[class*="sc-79c00fd3-0"]');
-                if (section) {
-                    lis = Array.from(section.querySelectorAll('li'));
-                } 
+                // 方案 A: 查找 Section 或新的容器
+                // 2024-12-23: Pixiv 更新，推荐作品容器变为 div.sc-bf8cea3f-0.dKbaFf
+                const containers = document.querySelectorAll('section[class*="sc-79c00fd3-0"], div.sc-bf8cea3f-0.dKbaFf');
+                if (containers.length > 0) {
+                    containers.forEach(container => {
+                        container.querySelectorAll('li').forEach(li => lis.push(li));
+                    });
+                }
                 
                 // 方案 B: 回退查找
                 if (!lis || lis.length === 0) {
