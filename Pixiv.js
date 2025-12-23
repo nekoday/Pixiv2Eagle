@@ -1584,8 +1584,8 @@ SOFTWARE.
             } 
             // 2. 插画/漫画页面 (以及用户主页可能的列表)
             else {
-                // 用户提供的选择器: div.sc-e83d358-0.daBOIJ
-                const selector = 'div.sc-e83d358-0.daBOIJ';
+                // 用户提供的选择器: div.sc-bf8cea3f-0.dKbaFf
+                const selector = 'div.sc-bf8cea3f-0.dKbaFf';
                 console.log('[Pixiv2Eagle] 插画/漫画页面：尝试定位列表容器', selector);
                 listContainer = await waitForElement(selector, 5000);
             }
