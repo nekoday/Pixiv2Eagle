@@ -56,6 +56,40 @@ SOFTWARE.
     const PIXIV_SECTION_CLASS = "sc-7709e4d9-0"; // deprecated
     const PIXIV_ARTIST_DIV_CLASS = "sc-946c1cc3-1 lnPJtB"; // deprecated
 
+    // DOM Selectors - Recommendation Area
+    const REC_SECTION_SELECTOR = 'section[class*="sc-79c00fd3-0"]'; // 推荐作品区域容器 (Section)
+    const REC_CONTAINER_SELECTOR = 'div.sc-bf8cea3f-0.dKbaFf'; // 推荐作品区域容器 (Div, 新版)
+    const REC_WORK_LINK_SELECTOR = 'a.sc-fab8f26d-6'; // 推荐作品链接 (用于提取 PID)
+    const REC_ARTIST_LINK_SELECTOR = 'a.sc-fbe982d0-2'; // 推荐作品画师链接 (用于提取 UID)
+    const REC_THUMBNAIL_SELECTOR = 'div.sc-f44a0b30-9.cvPXKv'; // 推荐作品缩略图容器 (首选标记位置)
+    const REC_THUMBNAIL_FALLBACK_SELECTOR = 'div.sc-fab8f26d-3.etVILu'; // 推荐作品缩略图容器 (备选)
+    const REC_THUMBNAIL_FALLBACK_PARTIAL_SELECTOR = 'div.sc-fab8f26d-3'; // 推荐作品缩略图容器 (部分匹配备选)
+
+    // DOM Selectors - Artist List / Series
+    const LIST_CONTAINER_SELECTOR = 'div.sc-bf8cea3f-0.dKbaFf'; // 画师插画/漫画列表容器
+    const SERIES_PAGE_LIST_SELECTOR = 'div.sc-de6bf819-3.cNVLSX'; // 系列页面作品列表容器
+    const THUMBNAIL_CONTAINER_SELECTOR = 'div.sc-f44a0b30-9.cvPXKv'; // 列表作品缩略图容器
+    const THUMBNAIL_CONTAINER_PARTIAL_SELECTOR = 'div.sc-f44a0b30-9'; // 列表作品缩略图容器 (部分匹配)
+    
+    // DOM Selectors - Novel
+    const NOVEL_TITLE_SELECTOR = 'h1.sc-41178ccf-3.irrkHK'; // 小说标题
+    const NOVEL_DESC_SELECTOR = 'div.sc-fcc502d1-0.jNYFaO > p.sc-fcc502d1-1.YOSSS'; // 小说简介
+    const NOVEL_SERIES_DESC_SELECTOR = 'div.sc-fcc502d1-0.jNYFaO > p.sc-fcc502d1-1.fDflWh'; // 小说系列简介
+    const NOVEL_COVER_SELECTOR = 'img.sc-41178ccf-19.cKuUeg'; // 小说封面图片
+    const NOVEL_SERIES_COVER_SELECTOR = 'img.sc-11435b73-2.hnPyQB'; // 小说系列封面图片
+    const NOVEL_AUTHOR_SELECTOR = 'h2.sc-b6a5d604-0.kepWbf a[data-gtm-value]'; // 小说作者链接 (含 ID)
+    const NOVEL_SERIES_AUTHOR_SELECTOR = 'h2.sc-b6a5d604-0.kepWbf a[data-gtm-user-id]'; // 小说系列作者链接 (含 ID)
+    const NOVEL_CONTENT_SELECTOR = 'div.sc-ejfMa-d.eXXQXn'; // 小说正文内容容器
+    const NOVEL_SERIES_SECTION_SELECTOR = 'section.sc-55920ee2-1'; // 小说所属系列区域 (用于判断是否属于系列)
+    const NOVEL_SERIES_LINK_SELECTOR = 'a.sc-13d2e2cd-0.gwOqfd[href^="/novel/series/"]'; // 小说系列链接
+    const NOVEL_SAVE_BUTTON_SECTION_SELECTOR = 'section.sc-44936c9d-0.bmSdAW'; // 小说保存按钮插入位置
+    const NOVEL_CHAPTER_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列章节列表容器
+    const NOVEL_CHAPTER_ITEM_CONTAINER_SELECTOR = 'div.sc-3a91e6c3-6.eJoreT'; // 小说章节列表项容器 (用于插入标记)
+    const NOVEL_CHAPTER_REF_BUTTON_SELECTOR = 'button.sc-5d3311e8-0.iGxyRb'; // 小说章节列表参考按钮 (标记插在此之前)
+
+    // DOM Selectors - Misc
+    const SERIES_NAV_BUTTON_SELECTOR = 'div.sc-487e14c9-0.doUXUo'; // 漫画系列"加入追更"按钮 (用于判断是否为漫画系列)
+
     // 获取文件夹 ID
     function getFolderId() {
         return GM_getValue("pixivFolderId", "");
@@ -674,7 +708,7 @@ SOFTWARE.
             if (!artistFolder) return null;
 
             // 检查当前页面是否为漫画系列（通过"加入追更列表"按钮判断）
-            const isSeriesPage = !!document.querySelector('div.sc-487e14c9-0.doUXUo');
+            const isSeriesPage = !!document.querySelector(SERIES_NAV_BUTTON_SELECTOR);
 
             // 默认在画师文件夹检查，如有系列或当前为系列页面则进入系列文件夹
             let currentFolder = artistFolder;
@@ -1562,7 +1596,7 @@ SOFTWARE.
             
             // 1. 系列页面
             if (location.pathname.includes('/series/')) {
-                const selector = 'div.sc-de6bf819-3.cNVLSX';
+                const selector = SERIES_PAGE_LIST_SELECTOR;
                 console.log('[Pixiv2Eagle] 系列页面：尝试定位列表容器', selector);
                 // 尝试等待容器出现（最多 5 秒，避免过久阻塞）
                 listContainer = await new Promise(resolve => {
@@ -1585,7 +1619,7 @@ SOFTWARE.
             // 2. 插画/漫画页面 (以及用户主页可能的列表)
             else {
                 // 用户提供的选择器: div.sc-bf8cea3f-0.dKbaFf
-                const selector = 'div.sc-bf8cea3f-0.dKbaFf';
+                const selector = LIST_CONTAINER_SELECTOR;
                 console.log('[Pixiv2Eagle] 插画/漫画页面：尝试定位列表容器', selector);
                 listContainer = await waitForElement(selector, 5000);
             }
@@ -1610,7 +1644,7 @@ SOFTWARE.
                     
                     // 查找目标缩略图容器 (标记插入点)
                     // 优先匹配带 radius="4" 的 div.sc-f44a0b30-9.cvPXKv
-                    let target = li.querySelector('div.sc-f44a0b30-9.cvPXKv');
+                    let target = li.querySelector(THUMBNAIL_CONTAINER_SELECTOR);
                     if (!target) target = li.querySelector('div.sc-f44a0b30-9');
                     
                     // 备选：如果找不到特定 class，尝试找图片容器
@@ -2035,7 +2069,7 @@ SOFTWARE.
                 }
 
                 // 提取作品 PID
-                let titleLink = li.querySelector('a.sc-fab8f26d-6');
+                let titleLink = li.querySelector(REC_WORK_LINK_SELECTOR);
                 if (!titleLink) titleLink = li.querySelector('a[href*="/artworks/"]');
                 
                 if (!titleLink) {
@@ -2050,7 +2084,7 @@ SOFTWARE.
                 const pid = pidMatch[1];
 
                 // 提取画师 UID
-                let artistLink = li.querySelector('a.sc-fbe982d0-2');
+                let artistLink = li.querySelector(REC_ARTIST_LINK_SELECTOR);
                 if (!artistLink) artistLink = li.querySelector('a[href*="/users/"]');
 
                 if (!artistLink) {
@@ -2104,11 +2138,11 @@ SOFTWARE.
             // 3. 添加标记函数
             const addBadge = (li, pid) => {
                 // 寻找缩略图容器
-                let target = li.querySelector('div.sc-f44a0b30-9.cvPXKv');
+                let target = li.querySelector(REC_THUMBNAIL_SELECTOR);
                 if (!target) target = li.querySelector('div.sc-f44a0b30-9');
                 
                 // 备选容器
-                if (!target) target = li.querySelector('div.sc-fab8f26d-3.etVILu');
+                if (!target) target = li.querySelector(REC_THUMBNAIL_FALLBACK_SELECTOR);
                 if (!target) target = li.querySelector('div.sc-fab8f26d-3');
 
                 // 图片容器回退
@@ -2154,7 +2188,7 @@ SOFTWARE.
                 
                 // 方案 A: 查找 Section 或新的容器
                 // 2024-12-23: Pixiv 更新，推荐作品容器变为 div.sc-bf8cea3f-0.dKbaFf
-                const containers = document.querySelectorAll('section[class*="sc-79c00fd3-0"], div.sc-bf8cea3f-0.dKbaFf');
+                const containers = document.querySelectorAll(`${REC_SECTION_SELECTOR}, ${REC_CONTAINER_SELECTOR}`);
                 if (containers.length > 0) {
                     containers.forEach(container => {
                         container.querySelectorAll('li').forEach(li => lis.push(li));
@@ -2163,7 +2197,7 @@ SOFTWARE.
                 
                 // 方案 B: 回退查找
                 if (!lis || lis.length === 0) {
-                    const links = document.querySelectorAll('a[class*="sc-fab8f26d-6"]');
+                    const links = document.querySelectorAll(REC_WORK_LINK_SELECTOR);
                     if (links.length > 0) {
                         const liSet = new Set();
                         links.forEach(a => {
@@ -2232,29 +2266,29 @@ SOFTWARE.
     async function getNovelDetails(novelId) {
         try {
             // 标题
-            const titleEl = document.querySelector("h1.sc-41178ccf-3.irrkHK");
+            const titleEl = document.querySelector(NOVEL_TITLE_SELECTOR);
             const title = titleEl ? titleEl.textContent.trim() : `Novel_${novelId}`;
 
             // 简介
-            const descEl = document.querySelector("div.sc-fcc502d1-0.jNYFaO > p.sc-fcc502d1-1.YOSSS");
+            const descEl = document.querySelector(NOVEL_DESC_SELECTOR);
             const description = descEl ? descEl.textContent.trim() : "";
 
             // 封面
-            const coverImg = document.querySelector("img.sc-41178ccf-19.cKuUeg");
+            const coverImg = document.querySelector(NOVEL_COVER_SELECTOR);
             const coverUrl = coverImg ? coverImg.src : null;
 
             // 作者
-            const authorLink = document.querySelector("h2.sc-b6a5d604-0.kepWbf a[data-gtm-value]");
+            const authorLink = document.querySelector(NOVEL_AUTHOR_LINK_SELECTOR);
             const authorId = authorLink ? authorLink.getAttribute("data-gtm-value") : null;
             const authorName = authorLink ? authorLink.textContent.trim() : "Unknown";
 
             // 系列信息
-            const seriesSection = document.querySelector("section.sc-55920ee2-1");
+            const seriesSection = document.querySelector(NOVEL_SERIES_SECTION_SELECTOR);
             let seriesId = null;
             let seriesTitle = null;
             
             if (seriesSection) {
-                const seriesLink = document.querySelector('a.sc-13d2e2cd-0.gwOqfd[href^="/novel/series/"]');
+                const seriesLink = document.querySelector(NOVEL_SERIES_LINK_SELECTOR);
                 if (seriesLink) {
                     const match = seriesLink.getAttribute("href").match(/\/novel\/series\/(\d+)/);
                     if (match) {
@@ -2265,7 +2299,7 @@ SOFTWARE.
             }
 
             // 内容
-            const contentContainer = document.querySelector("div.sc-ejfMa-d.eXXQXn");
+            const contentContainer = document.querySelector(NOVEL_CONTENT_SELECTOR);
             let content = "";
             if (contentContainer) {
                 const paragraphs = Array.from(contentContainer.querySelectorAll("p"));
@@ -2519,7 +2553,7 @@ SOFTWARE.
         const oldWrapper = document.getElementById(EAGLE_SAVE_BUTTON_ID);
         if (oldWrapper) return;
 
-        const targetSection = await waitForElement('section.sc-44936c9d-0.bmSdAW');
+        const targetSection = await waitForElement(NOVEL_BUTTON_SECTION_SELECTOR);
         if (!targetSection) return;
 
         // 双重检查，防止在等待过程中重复创建
@@ -2547,14 +2581,14 @@ SOFTWARE.
 
     // 在小说系列页面标记已保存章节
     async function markSavedInNovelSeries() {
-        const listContainer = await waitForElement('div.sc-794d489b-0.buoliH');
+        const listContainer = await waitForElement(NOVEL_SERIES_LIST_SELECTOR);
         if (!listContainer) return;
         
         const seriesIdMatch = location.pathname.match(/\/novel\/series\/(\d+)/);
         const seriesId = seriesIdMatch ? seriesIdMatch[1] : null;
         if (!seriesId) return;
         
-        const authorLink = document.querySelector("h2.sc-b6a5d604-0.kepWbf a[data-gtm-user-id]");
+        const authorLink = document.querySelector(NOVEL_SERIES_AUTHOR_LINK_SELECTOR);
         const authorId = authorLink ? authorLink.getAttribute("data-gtm-user-id") : null;
         if (!authorId) return;
         
@@ -2578,16 +2612,16 @@ SOFTWARE.
         
         const lis = listContainer.querySelectorAll('li');
         for (const li of lis) {
-            const link = li.querySelector('a[data-gtm-value]');
+            const link = li.querySelector(NOVEL_CHAPTER_LINK_SELECTOR);
             if (!link) continue;
             
             const novelId = link.getAttribute('data-gtm-value');
             if (savedChapterIds.has(novelId)) {
-                const targetContainer = li.querySelector('div.sc-3a91e6c3-6.eJoreT');
+                const targetContainer = li.querySelector(NOVEL_CHAPTER_BADGE_CONTAINER_SELECTOR);
                 if (targetContainer) {
                     if (targetContainer.querySelector('.eagle-saved-mark')) continue;
                     
-                    const refButton = targetContainer.querySelector('button.sc-5d3311e8-0.iGxyRb');
+                    const refButton = targetContainer.querySelector(NOVEL_CHAPTER_REF_BUTTON_SELECTOR);
                     
                     const mark = document.createElement('span');
                     mark.className = 'eagle-saved-mark';
