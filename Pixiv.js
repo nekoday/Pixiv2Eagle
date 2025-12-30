@@ -66,7 +66,7 @@ SOFTWARE.
     const REC_THUMBNAIL_FALLBACK_PARTIAL_SELECTOR = 'div.sc-fab8f26d-3'; // 推荐作品缩略图容器 (部分匹配备选)
 
     // DOM Selectors - Artist List / Series
-    const LIST_CONTAINER_SELECTOR = 'div.sc-bf8cea3f-0.dKbaFf'; // 画师插画/漫画列表容器
+    const LIST_CONTAINER_SELECTOR = 'div.sc-e83d358-0.daBOIJ'; // 画师插画/漫画列表容器
     const SERIES_PAGE_LIST_SELECTOR = 'div.sc-de6bf819-3.cNVLSX'; // 系列页面作品列表容器
     const THUMBNAIL_CONTAINER_SELECTOR = 'div.sc-f44a0b30-9.cvPXKv'; // 列表作品缩略图容器
     const THUMBNAIL_CONTAINER_PARTIAL_SELECTOR = 'div.sc-f44a0b30-9'; // 列表作品缩略图容器 (部分匹配)
@@ -91,6 +91,8 @@ SOFTWARE.
     const SERIES_NAV_BUTTON_SELECTOR = 'div.sc-487e14c9-0.doUXUo'; // 漫画系列"加入追更"按钮 (用于判断是否为漫画系列)
     const MANGA_SERIES_INFO_SELECTOR = 'div.sc-41178ccf-0.fwlXRJ a'; // 漫画系列信息 (用于提取章节序号)
     const MANGA_SERIES_HEADER_SELECTOR = 'div.sc-e4a4c914-0.Hwtke'; // 漫画系列页面头部 (用于插入更新按钮)
+    const ARTWORK_BUTTON_CONTAINER_SELECTOR = 'div.sc-7fd477ff-3.jrRrCf'; // 作品详情页按钮容器
+    const ARTWORK_BUTTON_REF_SELECTOR = 'div.sc-7fd477ff-4.duoqQE'; // 作品详情页按钮插入参考点
 
     // 获取文件夹 ID
     function getFolderId() {
@@ -344,6 +346,20 @@ SOFTWARE.
         }
     }
 
+    /**
+     * 移除标题中的序号部分（#数字 或 第数字话）
+     * @param {string} title - 原始标题
+     * @returns {string} 处理后的标题
+     */
+    function removeChapterNumber(title) {
+        const numMatch = title.match(/#(\d+)/) || title.match(/第(\d+)[话話]/) || title.match(/^(\d+)$/);
+        if (numMatch) {
+            const cleaned = title.replace(numMatch[0], "").trim();
+            return cleaned || title; // 如果清理后为空，返回原标题
+        }
+        return title;
+    }
+
     // 封装 GM_xmlhttpRequest 为 Promise
     function gmFetch(url, options = {}) {
         return new Promise((resolve, reject) => {
@@ -384,13 +400,22 @@ SOFTWARE.
 
     // 检查 Eagle 是否运行
     async function checkEagle() {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:402',message:'checkEagle entry',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         try {
             const data = await gmFetch("http://localhost:41595/api/application/info");
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:405',message:'Eagle API call success',data:{status:data?.status,hasVersion:!!data?.data?.version,version:data?.data?.version},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             return {
                 running: true,
                 version: data.data.version,
             };
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:410',message:'Eagle API call failed',data:{errorName:error?.name,errorMessage:error?.message,errorStack:error?.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error("Eagle 未启动或无法连接:", error);
             return {
                 running: false,
@@ -401,6 +426,9 @@ SOFTWARE.
 
     // 查询 Eagle 中是否已保存指定作品
     async function isArtworkSavedInEagle(artworkId, folderId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:419',message:'isArtworkSavedInEagle entry',data:{artworkId,folderId,hasFolderId:!!folderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         if (!folderId) {
             return { saved: false, itemId: null };
         }
@@ -419,7 +447,13 @@ SOFTWARE.
                     offset: offset.toString(),
                 });
 
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:438',message:'Before item/list API call',data:{offset,loopCount,limit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 const data = await gmFetch(`http://localhost:41595/api/item/list?${params.toString()}`);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:439',message:'After item/list API call',data:{status:data?.status,hasData:!!data?.data,isArray:Array.isArray(data?.data),itemsCount:Array.isArray(data?.data)?data.data.length:(data?.data?.items?.length||0)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 if (!data || !data.status) break;
 
                 const items = Array.isArray(data.data)
@@ -428,8 +462,39 @@ SOFTWARE.
                     ? data.data.items
                     : [];
 
-                const matched = items.find((item) => item.url === artworkUrl);
+                // 1. 快速检查：直接对比列表返回的 url
+                let matched = items.find((item) => item.url === artworkUrl);
+                
+                // 2. 深度检查：如果列表没找到，遍历调用 /api/item/info 获取详细信息对比
+                // (优化：解决列表接口可能返回不完整或缓存数据的问题)
+                if (!matched && items.length > 0) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:452',message:'Starting deep check',data:{itemsCount:items.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
+                    const concurrency = 5; // 并发数限制
+                    for (let i = 0; i < items.length; i += concurrency) {
+                        const chunk = items.slice(i, i + concurrency);
+                        const results = await Promise.all(chunk.map(async (item) => {
+                            try {
+                                const infoData = await gmFetch(`http://localhost:41595/api/item/info?id=${item.id}`);
+                                if (infoData && infoData.data && infoData.data.url === artworkUrl) {
+                                    return item;
+                                }
+                            } catch (e) {
+                                // 忽略单个获取失败
+                            }
+                            return null;
+                        }));
+                        
+                        matched = results.find(r => r);
+                        if (matched) break;
+                    }
+                }
+
                 if (matched) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:473',message:'Artwork found in Eagle',data:{itemId:matched.id,loopCount,offset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     return {
                         saved: true,
                         itemId: matched.id,
@@ -441,9 +506,15 @@ SOFTWARE.
                 loopCount += 1;
             }
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:485',message:'isArtworkSavedInEagle error',data:{errorName:error?.name,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error("检测作品保存状态失败:", error);
         }
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:488',message:'Artwork not found in Eagle',data:{artworkId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         return { saved: false, itemId: null };
     }
 
@@ -709,6 +780,10 @@ SOFTWARE.
             const artistFolder = await findArtistFolder(pixivFolderId, details.userId);
             if (!artistFolder) return null;
 
+            if (getDebugMode()) {
+                console.log(`[Pixiv2Eagle] 开始查找作品: ${artworkId}, 标题: ${details.title}`);
+            }
+
             // 检查当前页面是否为漫画系列（通过"加入追更列表"按钮判断）
             const isSeriesPage = !!document.querySelector(SERIES_NAV_BUTTON_SELECTOR);
 
@@ -786,6 +861,90 @@ SOFTWARE.
             const savedChild = findInSubfolders(currentFolder);
             if (savedChild) {
                 return { folder: savedChild, itemId: null };
+            }
+
+            // 3. 尝试通过标题在画师文件夹及其子文件夹中搜索 (弥补上述检查可能遗漏的情况)
+            if (details.illustTitle) {
+                try {
+                    // 收集画师文件夹及其所有子文件夹的 ID
+                    const allFolderIds = [artistFolder.id];
+                    function collectFolderIds(folder) {
+                        if (folder.children) {
+                            folder.children.forEach(child => {
+                                allFolderIds.push(child.id);
+                                collectFolderIds(child);
+                            });
+                        }
+                    }
+                    collectFolderIds(artistFolder);
+
+                    // 移除标题中的序号部分，以便进行模糊匹配
+                    const searchKeyword = removeChapterNumber(details.illustTitle);
+
+                    if (getDebugMode()) {
+                        console.log(`[Pixiv2Eagle] 尝试通过标题搜索: "${searchKeyword}" (原标题: "${details.illustTitle}"), 搜索范围: ${allFolderIds.length} 个文件夹`);
+                    }
+
+                    const params = new URLSearchParams({
+                        folders: allFolderIds.join(','),
+                        keyword: searchKeyword,
+                        limit: "50"
+                    });
+                    // 注意：Eagle 的 keyword 搜索是模糊匹配
+                    const searchUrl = `http://localhost:41595/api/item/list?${params.toString()}`;
+                    const data = await gmFetch(searchUrl);
+                    
+                    if (data && data.status === "success") {
+                        const items = Array.isArray(data.data) ? data.data : (data.data?.items || []);
+                        const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
+                        
+                        if (getDebugMode()) {
+                            console.log(`[Pixiv2Eagle] 标题搜索结果: 找到 ${items.length} 个项目`);
+                        }
+
+                        // 优先检查 URL 匹配
+                        let matched = items.find(item => item.url === artworkUrl);
+                        
+                        // 如果没有直接匹配，尝试获取详细信息验证 (深度检查)
+                        if (!matched && items.length > 0) {
+                            if (getDebugMode()) {
+                                console.log(`[Pixiv2Eagle] 列表 URL 未匹配，尝试深度检查 ${items.length} 个项目...`);
+                            }
+                            const concurrency = 5;
+                            for (let i = 0; i < items.length; i += concurrency) {
+                                const chunk = items.slice(i, i + concurrency);
+                                const results = await Promise.all(chunk.map(async (item) => {
+                                    try {
+                                        const infoData = await gmFetch(`http://localhost:41595/api/item/info?id=${item.id}`);
+                                        if (infoData && infoData.data && infoData.data.url === artworkUrl) {
+                                            return item;
+                                        }
+                                    } catch (e) { return null; }
+                                    return null;
+                                }));
+                                matched = results.find(r => r);
+                                if (matched) break;
+                            }
+                        }
+
+                        if (matched) {
+                            if (getDebugMode()) {
+                                console.log(`[Pixiv2Eagle] ✅ 通过标题搜索找到已保存作品:`, matched.id);
+                            }
+                            return { folder: artistFolder, itemId: matched.id };
+                        } else {
+                            if (getDebugMode()) {
+                                console.log(`[Pixiv2Eagle] ❌ 标题搜索未找到匹配 URL 的作品`);
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error("通过标题搜索失败:", err);
+                }
+            } else {
+                if (getDebugMode()) {
+                    console.log(`[Pixiv2Eagle] ❌ 无法获取作品标题，跳过标题搜索`);
+                }
             }
 
             return null;
@@ -1229,6 +1388,9 @@ SOFTWARE.
 
     // 保存图片到 Eagle
     async function saveToEagle(imageUrls, folderId, details, artworkId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1360',message:'saveToEagle entry',data:{artworkId,folderId,imageUrlCount:imageUrls?.length,illustType:details?.illustType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         async function getUgoiraUrl(artworkId) {
             const gifBlob = await convertUgoiraToGifBlob(artworkId);
             const [base64, dataURL] = await (async () => {
@@ -1257,6 +1419,9 @@ SOFTWARE.
         const shouldSaveDescription = getSaveDescription();
         const annotation = shouldSaveDescription ? details.description : undefined;
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1390',message:'Before Eagle API call',data:{folderId,itemCount:imageUrls.length,isUgoira,isMultiPage},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         // 批量添加图片
         const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
             method: "POST",
@@ -1281,7 +1446,13 @@ SOFTWARE.
             }),
         });
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1413',message:'After Eagle API call',data:{status:data?.status,hasData:!!data?.data,dataLength:data?.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         if (!data.status) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1414',message:'Save failed - status false',data:{status:data?.status,data:JSON.stringify(data).substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             throw new Error("保存图片失败");
         }
 
@@ -1562,6 +1733,187 @@ SOFTWARE.
         }
     }
 
+    // 将作品文件移动到子文件夹
+    async function moveArtworkToSubfolder(artworkId) {
+        const folderId = getFolderId();
+        if (!folderId) {
+            alert("请先设置 Pixiv 文件夹 ID！");
+            return;
+        }
+
+        const eagleStatus = await checkEagle();
+        if (!eagleStatus.running) {
+            alert("Eagle 未启动！");
+            return;
+        }
+
+        // 检查是否启用了子文件夹功能
+        const createSubFolderMode = getCreateSubFolder();
+        if (createSubFolderMode === 'off') {
+            alert("请先启用多页作品子文件夹功能！");
+            return;
+        }
+
+        try {
+            // 1. 获取作品详情
+            const details = await getArtworkDetails(artworkId);
+            if (!details) {
+                alert("无法获取作品详情");
+                return;
+            }
+
+            // 2. 查找画师文件夹
+            const artistFolder = await findArtistFolder(folderId, details.userId);
+            if (!artistFolder) {
+                alert("未找到画师文件夹");
+                return;
+            }
+
+            // 3. 确定目标父文件夹 (根据"按类型保存"设置)
+            let targetParentFolder = artistFolder;
+            if (getSaveByType()) {
+                const typeInfo = getTypeFolderInfo(details.illustType);
+                targetParentFolder = await getOrCreateTypeFolder(artistFolder, typeInfo);
+                if (getDebugMode()) {
+                    console.log(`[Pixiv2Eagle] 按类型保存开启，目标父文件夹: ${targetParentFolder.name}`);
+                }
+            }
+
+            // 4. 检查是否需要创建子文件夹（根据 createSubFolder 设置）
+            const shouldCreateSubfolder = 
+                createSubFolderMode === 'always' || 
+                (createSubFolderMode === 'multi-page' && details.pageCount > 1) ||
+                details.illustType === 1; // 漫画始终创建子文件夹
+
+            if (!shouldCreateSubfolder) {
+                alert("根据当前设置，此作品不需要子文件夹");
+                return;
+            }
+
+            // 5. 查找或创建目标子文件夹
+            let subFolder = null;
+            if (targetParentFolder.children) {
+                subFolder = targetParentFolder.children.find(c => c.description === artworkId);
+            }
+
+            if (!subFolder) {
+                // 创建子文件夹
+                const subFolderId = await createEagleFolder(
+                    details.illustTitle,
+                    targetParentFolder.id,
+                    artworkId
+                );
+                subFolder = { id: subFolderId, name: details.illustTitle };
+                if (getDebugMode()) {
+                    console.log(`[Pixiv2Eagle] 已创建子文件夹: ${details.illustTitle} (在 ${targetParentFolder.name} 下)`);
+                }
+            } else {
+                if (getDebugMode()) {
+                    console.log(`[Pixiv2Eagle] 子文件夹已存在: ${subFolder.name}`);
+                }
+            }
+
+            // 6. 查找所有属于该作品的文件 (在整个画师文件夹树中查找)
+            // 收集画师文件夹及其所有子文件夹的 ID
+            const allFolderIds = [artistFolder.id];
+            function collectFolderIds(folder) {
+                if (folder.children) {
+                    folder.children.forEach(child => {
+                        allFolderIds.push(child.id);
+                        collectFolderIds(child);
+                    });
+                }
+            }
+            collectFolderIds(artistFolder);
+
+            // 构造搜索关键字 (移除序号以便模糊匹配)
+            const searchKeyword = removeChapterNumber(details.illustTitle);
+
+            if (getDebugMode()) {
+                console.log(`[Pixiv2Eagle] 正在搜索待移动文件，关键字: "${searchKeyword}", 范围: ${allFolderIds.length} 个文件夹`);
+            }
+
+            const params = new URLSearchParams({
+                folders: allFolderIds.join(','),
+                keyword: searchKeyword,
+                limit: "200" // 假设单次能搜到所有相关图片
+            });
+            
+            const searchUrl = `http://localhost:41595/api/item/list?${params.toString()}`;
+            const data = await gmFetch(searchUrl);
+            
+            let artworkItems = [];
+            if (data && data.status === "success") {
+                const items = Array.isArray(data.data) ? data.data : (data.data?.items || []);
+                const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
+                
+                // 过滤出 URL 匹配的项目
+                artworkItems = items.filter(item => item.url === artworkUrl);
+                
+                // 如果 URL 匹配失败，尝试深度检查 (针对 Eagle 可能未索引 URL 的情况)
+                if (artworkItems.length === 0 && items.length > 0) {
+                    if (getDebugMode()) {
+                        console.log(`[Pixiv2Eagle] 列表 URL 未匹配，尝试深度检查 ${items.length} 个项目...`);
+                    }
+                    const concurrency = 5;
+                    for (let i = 0; i < items.length; i += concurrency) {
+                        const chunk = items.slice(i, i + concurrency);
+                        const results = await Promise.all(chunk.map(async (item) => {
+                            try {
+                                const infoData = await gmFetch(`http://localhost:41595/api/item/info?id=${item.id}`);
+                                if (infoData && infoData.data && infoData.data.url === artworkUrl) {
+                                    return item;
+                                }
+                            } catch (e) { return null; }
+                            return null;
+                        }));
+                        const found = results.filter(r => r);
+                        artworkItems.push(...found);
+                    }
+                }
+            }
+
+            // 排除已经在目标文件夹中的项目
+            artworkItems = artworkItems.filter(item => {
+                // item.folders 可能是 undefined (list 接口不一定返回)，需要 info 接口确认吗？
+                // 通常 list 接口返回的 item 不包含 folders 列表，或者包含。
+                // 无论如何，再次移动到同一个文件夹是安全的，Eagle 会处理。
+                return true; 
+            });
+
+            if (artworkItems.length === 0) {
+                alert("未找到需要移动的文件 (请确认文件已保存且 URL 正确)");
+                return;
+            }
+
+            if (getDebugMode()) {
+                console.log(`[Pixiv2Eagle] 找到 ${artworkItems.length} 个文件，准备移动...`);
+            }
+
+            // 7. 移动文件到子文件夹
+            for (const item of artworkItems) {
+                // 修改 folders 属性并保存
+                await gmFetch("http://localhost:41595/api/item/update", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        id: item.id,
+                        folders: [subFolder.id]
+                    })
+                });
+                if (getDebugMode()) {
+                    console.log(`[Pixiv2Eagle] 已移动文件: ${item.name} -> ${subFolder.name}`);
+                }
+            }
+
+            alert(`✅ 成功将 ${artworkItems.length} 个文件移动到子文件夹 "${subFolder.name}"`);
+
+        } catch (error) {
+            console.error(error);
+            alert("移动失败: " + error.message);
+        }
+    }
+
     // 更新系列漫画的序号 (批量重命名)
     async function updateSeriesChapters() {
         const folderId = getFolderId();
@@ -1632,16 +1984,22 @@ SOFTWARE.
             }
 
             const lis = listContainer.querySelectorAll('li');
-            console.log(`[Pixiv2Eagle] 找到 ${lis.length} 个章节列表项`);
+            if (getDebugMode()) {
+                console.log(`[Pixiv2Eagle] 找到 ${lis.length} 个章节列表项`);
+            }
             
             if (!seriesFolder.children) {
-                console.log("[Pixiv2Eagle] 系列文件夹没有子文件夹信息，尝试重新获取");
+                if (getDebugMode()) {
+                    console.log("[Pixiv2Eagle] 系列文件夹没有子文件夹信息，尝试重新获取");
+                }
                 // 尝试重新获取该文件夹的详情，以确保 children 存在
                 // 注意：Eagle API folder/list 返回的是全树，但如果我们拿到的对象不完整，可能需要刷新
                 // 这里假设 seriesFolder 已经是完整的。如果为空，可能是真的没有子文件夹。
                 seriesFolder.children = [];
             }
-            console.log(`[Pixiv2Eagle] Eagle 系列文件夹中有 ${seriesFolder.children.length} 个子文件夹`);
+            if (getDebugMode()) {
+                console.log(`[Pixiv2Eagle] Eagle 系列文件夹中有 ${seriesFolder.children.length} 个子文件夹`);
+            }
 
             let updateCount = 0;
 
@@ -1682,14 +2040,31 @@ SOFTWARE.
                 }
 
                 if (!chapterNum) {
-                    console.log(`[Pixiv2Eagle] 无法从标题 "${title}" 中提取序号，跳过`);
+                    if (getDebugMode()) {
+                        console.log(`[Pixiv2Eagle] 无法从标题 "${title}" 中提取序号，跳过`);
+                    }
                     continue;
                 }
 
                 // 4. 在 Eagle 系列文件夹中查找对应章节文件夹
                 // 假设章节文件夹的 description 是 PID
                 // 使用 trim() 避免空白字符导致匹配失败
-                const chapterFolder = seriesFolder.children.find(c => (c.description || "").trim() === pid);
+                let chapterFolder = seriesFolder.children.find(c => (c.description || "").trim() === pid);
+
+                // 如果通过 PID 没找到，尝试通过标题查找
+                if (!chapterFolder) {
+                    // 移除标题中的序号部分，以便进行模糊匹配
+                    const searchTitle = removeChapterNumber(title);
+                    
+                    if (searchTitle) {
+                        // 尝试在子文件夹名称中查找 (只要包含处理后的标题即可)
+                        chapterFolder = seriesFolder.children.find(c => c.name.includes(searchTitle));
+                        if (chapterFolder && getDebugMode()) {
+                            console.log(`[Pixiv2Eagle] 通过标题 "${searchTitle}" 匹配到文件夹: ${chapterFolder.name}`);
+                        }
+                    }
+                }
+
                 if (chapterFolder) {
                     // 构造新名称: #序号 标题
                     // 如果标题本身已经包含 #序号，则避免重复
@@ -1700,7 +2075,9 @@ SOFTWARE.
 
                     // 如果名称不同，则重命名文件夹
                     if (chapterFolder.name !== newName) {
-                        console.log(`[Pixiv2Eagle] 重命名文件夹: ${chapterFolder.name} -> ${newName}`);
+                        if (getDebugMode()) {
+                            console.log(`[Pixiv2Eagle] 重命名文件夹: ${chapterFolder.name} -> ${newName}`);
+                        }
                         await gmFetch("http://localhost:41595/api/folder/rename", {
                             method: "POST",
                             headers: { "Content-Type": "application/json" },
@@ -1729,7 +2106,9 @@ SOFTWARE.
 
                             const newItemName = `${newName}${suffix}`;
                             if (item.name !== newItemName) {
-                                console.log(`[Pixiv2Eagle] 重命名图片: ${item.name} -> ${newItemName}`);
+                                if (getDebugMode()) {
+                                    console.log(`[Pixiv2Eagle] 重命名图片: ${item.name} -> ${newItemName}`);
+                                }
                                 await gmFetch("http://localhost:41595/api/item/update", {
                                     method: "POST",
                                     headers: { "Content-Type": "application/json" },
@@ -1860,7 +2239,9 @@ SOFTWARE.
             if (debug) console.debug('[Pixiv2Eagle] markSavedInArtistList:', ...args);
         }
 
-        console.log('[Pixiv2Eagle] markSavedInArtistList 函数已执行，当前URL:', location.pathname, '调试模式:', debug);
+        if (debug) {
+            console.log('[Pixiv2Eagle] markSavedInArtistList 函数已执行，当前URL:', location.pathname, '调试模式:', debug);
+        }
 
         try {
             // 仅在用户的常见画师列表或系列页面上运行
@@ -2232,22 +2613,39 @@ SOFTWARE.
     let isRecAreaInitializing = false;
     let currentRecUrl = ""; // 记录当前监控的 URL，防止重复初始化
 
-    let globalEagleIndex = null;
-    let eagleIndexLoadingPromise = null;
+    // 使用 window 对象存储索引，避免页面导航时被重置
+    if (typeof window.__pixiv2eagle_globalEagleIndex === 'undefined') {
+        window.__pixiv2eagle_globalEagleIndex = null;
+    }
+    if (typeof window.__pixiv2eagle_eagleIndexLoadingPromise === 'undefined') {
+        window.__pixiv2eagle_eagleIndexLoadingPromise = null;
+    }
 
     // 异步构建 Eagle 索引 (单例模式)
     async function ensureEagleIndex() {
-        if (globalEagleIndex) return globalEagleIndex;
-        if (eagleIndexLoadingPromise) return eagleIndexLoadingPromise;
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2578',message:'ensureEagleIndex entry',data:{hasGlobalIndex:!!window.__pixiv2eagle_globalEagleIndex,hasLoadingPromise:!!window.__pixiv2eagle_eagleIndexLoadingPromise},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        if (window.__pixiv2eagle_globalEagleIndex) return window.__pixiv2eagle_globalEagleIndex;
+        if (window.__pixiv2eagle_eagleIndexLoadingPromise) return window.__pixiv2eagle_eagleIndexLoadingPromise;
 
         console.log("[Pixiv2Eagle] 正在构建全局 Eagle 索引...");
-        eagleIndexLoadingPromise = (async () => {
+        window.__pixiv2eagle_eagleIndexLoadingPromise = (async () => {
             const index = new Map();
             const pixivFolderId = getFolderId();
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2586',message:'Index building started',data:{hasPixivFolderId:!!pixivFolderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             if (!pixivFolderId) return index;
 
             try {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2589',message:'Before folder/list API call',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
                 const folderList = await gmFetch("http://localhost:41595/api/folder/list");
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2590',message:'After folder/list API call',data:{status:folderList?.status,isArray:Array.isArray(folderList?.data),dataLength:folderList?.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
                 if (folderList.status && Array.isArray(folderList.data)) {
                     const findFolder = (folders, id) => {
                         for (const f of folders) {
@@ -2260,6 +2658,9 @@ SOFTWARE.
                         return null;
                     };
                     const root = findFolder(folderList.data, pixivFolderId);
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2601',message:'Root folder found',data:{hasRoot:!!root,hasChildren:!!root?.children,childrenCount:root?.children?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     
                     if (root && root.children) {
                         for (const artistFolder of root.children) {
@@ -2291,21 +2692,33 @@ SOFTWARE.
                             }
                         }
                     }
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2633',message:'Index building completed',data:{indexSize:index.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     console.log(`[Pixiv2Eagle] 全局 Eagle 索引构建完成，包含 ${index.size} 位画师`);
                 }
             } catch (e) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2635',message:'Index building error',data:{errorName:e?.name,errorMessage:e?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
                 console.error("[Pixiv2Eagle] 构建 Eagle 索引失败:", e);
             }
             return index;
         })();
 
         try {
-            globalEagleIndex = await eagleIndexLoadingPromise;
+            window.__pixiv2eagle_globalEagleIndex = await window.__pixiv2eagle_eagleIndexLoadingPromise;
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2642',message:'Index loaded successfully',data:{indexSize:window.__pixiv2eagle_globalEagleIndex?.size},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
         } catch (e) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2643',message:'Index loading error',data:{errorName:e?.name,errorMessage:e?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error(e);
-            eagleIndexLoadingPromise = null; // 允许重试
+            window.__pixiv2eagle_eagleIndexLoadingPromise = null; // 允许重试
         }
-        return globalEagleIndex;
+        return window.__pixiv2eagle_globalEagleIndex;
     }
 
     // 在推荐区域标记已保存作品
@@ -2387,16 +2800,22 @@ SOFTWARE.
                 const uid = uidMatch[1];
 
                 // 确保索引已就绪
-                if (!globalEagleIndex) {
+                if (!window.__pixiv2eagle_globalEagleIndex) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2729',message:'Index not ready',data:{pid,uid},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     pendingLis.add(li); // 索引未就绪，加入重试队列
                     return;
                 }
 
                 // 检查 Eagle 索引
-                const artistData = globalEagleIndex.get(uid);
+                const artistData = window.__pixiv2eagle_globalEagleIndex.get(uid);
                 
                 // 情况 1: 画师不在 Eagle 中 -> 肯定未保存 -> 标记为已检查
                 if (!artistData) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2738',message:'Artist not in Eagle',data:{pid,uid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 不在 Eagle 中 -> 未保存`);
                     li.dataset.eagleChecked = "1";
                     pendingLis.delete(li);
@@ -2405,18 +2824,27 @@ SOFTWARE.
 
                 // 情况 2: 画师在 Eagle 中，检查作品 PID
                 if (artistData.pids.has(pid)) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2746',message:'Artwork found in index',data:{pid,uid,indexSize:window.__pixiv2eagle_globalEagleIndex.size},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     const success = addBadge(li, pid);
                     if (success) {
                         li.dataset.eagleChecked = "1"; // 标记成功才设为 checked
                         pendingLis.delete(li);
                         console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记成功`);
                     } else {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2754',message:'Badge add failed',data:{pid,uid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                        // #endregion
                         // 标记失败（如找不到容器），加入重试队列
                         console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记失败 (找不到容器)，加入重试`);
                         pendingLis.add(li);
                     }
                 } else {
                     // 情况 3: 作品未保存 -> 标记为已检查
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2758',message:'Artwork not in index',data:{pid,uid,hasPids:!!artistData.pids,pidsSize:artistData.pids?.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 在 Eagle 中，但作品未保存`);
                     li.dataset.eagleChecked = "1";
                     pendingLis.delete(li);
@@ -2425,6 +2853,9 @@ SOFTWARE.
 
             // 3. 添加标记函数
             const addBadge = (li, pid) => {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2766',message:'addBadge entry',data:{pid,hasLi:!!li},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 // 寻找缩略图容器
                 let target = li.querySelector(REC_THUMBNAIL_SELECTOR);
                 if (!target) target = li.querySelector('div.sc-f44a0b30-9');
@@ -2439,6 +2870,9 @@ SOFTWARE.
                     if (img) target = img.parentElement;
                 }
 
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2781',message:'Target container check',data:{hasTarget:!!target,targetTag:target?.tagName,targetClass:target?.className?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 if (!target) return false;
 
                 if (target.querySelector('.eagle-saved-badge')) return true;
@@ -2464,13 +2898,16 @@ SOFTWARE.
                     target.style.position = 'relative';
                 }
                 target.appendChild(badge);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2806',message:'Badge added successfully',data:{pid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 return true;
             };
 
             // 4. 扫描逻辑
             const scan = () => {
                 // 如果索引还没好，先不处理，等待下一次 Timer
-                if (!globalEagleIndex) return;
+                if (!window.__pixiv2eagle_globalEagleIndex) return;
 
                 let lis = [];
                 
@@ -2927,6 +3364,86 @@ SOFTWARE.
         }
     }
 
+    // 在作品详情页添加"移动到子文件夹"按钮
+    async function addMoveToSubfolderButton() {
+        const artworkId = getArtworkId();
+        if (!artworkId) return;
+
+        try {
+            // 1. 检查"多页作品创建子文件夹"设置
+            const createSubFolderMode = getCreateSubFolder();
+            /*
+            if (createSubFolderMode === 'off') {
+                console.log('[Pixiv2Eagle] 子文件夹功能未启用，不显示按钮');
+                return;
+            }
+            */
+
+            // 2. 检查是否已保存
+            const savedInfo = await findSavedFolderForArtwork(artworkId);
+            /*
+            if (!savedInfo || !savedInfo.folder) {
+                console.log('[Pixiv2Eagle] 作品未保存，不显示按钮');
+                return;
+            }
+            */
+
+            // 3. 查找按钮容器（等待 DOM 加载）
+            await new Promise(resolve => setTimeout(resolve, 500)); // 等待页面完全加载
+            const container = document.querySelector(ARTWORK_BUTTON_CONTAINER_SELECTOR);
+            const refButton = document.querySelector(ARTWORK_BUTTON_REF_SELECTOR);
+            
+            if (!container) {
+                console.log('[Pixiv2Eagle] 未找到按钮容器:', ARTWORK_BUTTON_CONTAINER_SELECTOR);
+                console.log('[Pixiv2Eagle] 尝试查找所有可能的容器...');
+                const allDivs = document.querySelectorAll('div[class*="sc-7fd477ff"]');
+                console.log('[Pixiv2Eagle] 找到的相关容器:', allDivs.length);
+                allDivs.forEach((div, idx) => {
+                    console.log(`[Pixiv2Eagle] 容器 ${idx}:`, div.className);
+                });
+                return;
+            }
+
+            if (!refButton) {
+                console.log('[Pixiv2Eagle] 未找到参考按钮:', ARTWORK_BUTTON_REF_SELECTOR);
+                console.log('[Pixiv2Eagle] 容器内所有子元素:');
+                Array.from(container.children).forEach((child, idx) => {
+                    console.log(`[Pixiv2Eagle] 子元素 ${idx}:`, child.className, child.tagName);
+                });
+            }
+
+            // 4. 避免重复添加
+            if (document.getElementById('eagle-move-to-subfolder-btn')) {
+                console.log('[Pixiv2Eagle] 按钮已存在');
+                return;
+            }
+
+            // 5. 创建按钮
+            const btn = createPixivStyledButton("更新系列漫画至序列文件夹");
+            btn.id = 'eagle-move-to-subfolder-btn';
+            btn.style.marginLeft = '8px';
+            btn.onclick = async () => {
+                btn.textContent = '正在移动...';
+                btn.style.pointerEvents = 'none';
+                await moveArtworkToSubfolder(artworkId);
+                btn.textContent = '更新系列漫画至序列文件夹';
+                btn.style.pointerEvents = 'auto';
+            };
+
+            // 6. 插入按钮
+            if (refButton) {
+                container.insertBefore(btn, refButton);
+            } else {
+                // 如果没有参考按钮，直接添加到容器末尾
+                container.appendChild(btn);
+            }
+            console.log('[Pixiv2Eagle] ✅ 成功添加"移动到子文件夹"按钮');
+
+        } catch (error) {
+            console.error('[Pixiv2Eagle] ❌ 添加"移动到子文件夹"按钮失败:', error);
+        }
+    }
+
     // 主函数
     async function addButton() {
         // 移除旧按钮（如果存在）
@@ -2983,6 +3500,9 @@ SOFTWARE.
 
         // 自动检测是否已保存，已保存则更新按钮文本
         if (getAutoCheckSavedStatus()) updateSaveButtonIfSaved(saveButton);
+
+        // 添加"移动到子文件夹"按钮（如果适用）
+        addMoveToSubfolderButton();
     }
 
     const monitorConfig = [
