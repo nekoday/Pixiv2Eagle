@@ -84,8 +84,12 @@ SOFTWARE.
     const NOVEL_SERIES_LINK_SELECTOR = 'a.sc-13d2e2cd-0.gwOqfd[href^="/novel/series/"]'; // 小说系列链接
     const NOVEL_SAVE_BUTTON_SECTION_SELECTOR = 'section.sc-44936c9d-0.bmSdAW'; // 小说保存按钮插入位置
     const NOVEL_CHAPTER_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列章节列表容器
+    const NOVEL_SERIES_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列列表容器 (别名，与 NOVEL_CHAPTER_LIST_SELECTOR 相同)
+    const NOVEL_CHAPTER_LINK_SELECTOR = 'a[data-gtm-value]'; // 小说章节链接 (用于提取 novelId)
     const NOVEL_CHAPTER_ITEM_CONTAINER_SELECTOR = 'div.sc-3a91e6c3-6.eJoreT'; // 小说章节列表项容器 (用于插入标记)
+    const NOVEL_CHAPTER_BADGE_CONTAINER_SELECTOR = 'div.sc-3a91e6c3-6.eJoreT'; // 小说章节标记容器 (与 NOVEL_CHAPTER_ITEM_CONTAINER_SELECTOR 相同)
     const NOVEL_CHAPTER_REF_BUTTON_SELECTOR = 'button.sc-5d3311e8-0.iGxyRb'; // 小说章节列表参考按钮 (标记插在此之前)
+    const NOVEL_SERIES_AUTHOR_LINK_SELECTOR = 'h2.sc-b6a5d604-0.kepWbf a[data-gtm-user-id]'; // 小说系列作者链接 (与 NOVEL_SERIES_AUTHOR_SELECTOR 相同)
 
     // DOM Selectors - Misc
     const SERIES_NAV_BUTTON_SELECTOR = 'div.sc-487e14c9-0.doUXUo'; // 漫画系列"加入追更"按钮 (用于判断是否为漫画系列)
@@ -245,6 +249,18 @@ SOFTWARE.
     }
 
     // 注册菜单命令
+    // 强制更新 Eagle 索引
+    async function forceRefreshEagleIndex() {
+        try {
+            invalidateEagleIndex();
+            await ensureEagleIndex(true);
+            alert("✅ Eagle 索引已强制更新完成");
+        } catch (error) {
+            console.error("强制更新索引失败:", error);
+            alert(`❌ 强制更新索引失败: ${error.message}`);
+        }
+    }
+
     GM_registerMenuCommand("📁 设置 Pixiv 文件夹 ID", setFolderId);
     GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", toggleUseUploadDate);
     GM_registerMenuCommand("🕗 切换：保存作品描述", toggleSaveDescription);
@@ -252,6 +268,8 @@ SOFTWARE.
     GM_registerMenuCommand("🗂️ 切换：按类型保存", toggleSaveByType);
     GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
     GM_registerMenuCommand("🔎 切换：自动检测作品保存状态", toggleAutoCheckSavedStatus);
+    GM_registerMenuCommand("🔄 强制更新 Eagle 索引", forceRefreshEagleIndex);
+    GM_registerMenuCommand("📂 设置小说保存路径", setNovelSavePath);
     GM_registerMenuCommand("🧪 切换：调试模式", toggleDebugMode);
     GM_registerMenuCommand("🧪 设置画师文件夹名称模板", setArtistMatcher);
 
@@ -1386,6 +1404,158 @@ SOFTWARE.
         });
     }
 
+    // 下载文件到本地（使用浏览器下载 API）
+    function downloadFile(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+
+    // 下载图片到本地
+    async function downloadImageToLocal(imageUrl, filename) {
+        try {
+            const imageData = await gmFetchBinary(imageUrl, {
+                headers: {
+                    referer: "https://www.pixiv.net/"
+                }
+            });
+            const blob = new Blob([imageData], { type: "image/jpeg" });
+            downloadFile(blob, filename);
+            return true;
+        } catch (error) {
+            console.error(`下载图片失败 ${imageUrl}:`, error);
+            return false;
+        }
+    }
+
+    // 下载小说文件（文本或 Markdown）
+    function downloadNovelFile(content, filename, format) {
+        const mimeType = format === 'md' ? 'text/markdown' : 'text/plain';
+        const blob = new Blob([content], { type: mimeType });
+        downloadFile(blob, filename);
+    }
+
+    // 获取小说保存路径配置
+    function getNovelSavePath() {
+        return GM_getValue("novelSavePath", "");
+    }
+
+    // 设置小说保存路径
+    function setNovelSavePath() {
+        const currentPath = getNovelSavePath();
+        const userInput = prompt("请输入小说保存路径（例如：C:\\Users\\YourName\\Downloads）:", currentPath);
+        
+        if (userInput === null) return;
+        
+        const path = userInput.trim();
+        GM_setValue("novelSavePath", path);
+        
+        if (path === "") {
+            alert("已清空保存路径，将提示用户手动输入");
+        } else {
+            alert(`小说保存路径已设置为: ${path}`);
+        }
+    }
+
+    // 下载所有小说文件到本地
+    async function downloadNovelFiles(combinedContent, novelTitle, novelId) {
+        const safeTitle = novelTitle.replace(/[\\/:*?"<>|]/g, "_");
+        const fileExtension = combinedContent.format === 'md' ? 'md' : 'txt';
+        const filename = `${safeTitle}.${fileExtension}`;
+        
+        // 下载文本文件
+        downloadNovelFile(combinedContent.content, filename, combinedContent.format);
+        
+        // 下载所有图片（如果有）
+        const imagePaths = [];
+        if (combinedContent.images && combinedContent.images.length > 0) {
+            // 提示用户下载图片
+            const downloadImages = confirm(`检测到 ${combinedContent.images.length} 张图片，是否下载？\n\n请确保所有文件（文本和图片）都下载到同一目录中。`);
+            
+            if (downloadImages) {
+                for (let i = 0; i < combinedContent.images.length; i++) {
+                    const image = combinedContent.images[i];
+                    await new Promise(resolve => setTimeout(resolve, 500)); // 延迟避免浏览器阻止多个下载
+                    const success = await downloadImageToLocal(image.url, image.filename);
+                    if (success) {
+                        imagePaths.push(image.filename);
+                    }
+                }
+            }
+        }
+        
+        return {
+            novelFilename: filename,
+            imageFilenames: imagePaths
+        };
+    }
+
+    // 获取文件完整路径（提示用户输入）
+    async function getFilePaths(novelFilename, imageFilenames, basePath) {
+        const paths = {
+            novelPath: null,
+            imagePaths: []
+        };
+        
+        // 如果有配置的路径，使用它
+        if (basePath) {
+            // 处理路径分隔符（支持 Windows 和 Unix 风格）
+            const separator = basePath.includes('\\') ? '\\' : '/';
+            const normalizedBasePath = basePath.endsWith('\\') || basePath.endsWith('/') 
+                ? basePath.slice(0, -1) 
+                : basePath;
+            paths.novelPath = `${normalizedBasePath}${separator}${novelFilename}`;
+            imageFilenames.forEach(filename => {
+                paths.imagePaths.push(`${normalizedBasePath}${separator}${filename}`);
+            });
+            return paths;
+        }
+        
+        // 否则提示用户输入
+        const novelPath = prompt(
+            `请输入小说文件的完整路径：\n\n文件名：${novelFilename}\n\n示例：C:\\Users\\YourName\\Downloads\\${novelFilename}`,
+            ""
+        );
+        
+        if (!novelPath) {
+            throw new Error("未提供小说文件路径");
+        }
+        
+        paths.novelPath = novelPath.trim();
+        
+        // 从小说文件路径提取目录（支持 Windows 和 Unix 风格）
+        const lastBackslash = novelPath.lastIndexOf('\\');
+        const lastSlash = novelPath.lastIndexOf('/');
+        const lastSeparator = Math.max(lastBackslash, lastSlash);
+        const novelDir = lastSeparator >= 0 ? novelPath.substring(0, lastSeparator) : novelPath;
+        const separator = lastBackslash > lastSlash ? '\\' : '/';
+        
+        // 提示用户输入图片路径
+        if (imageFilenames.length > 0) {
+            const defaultPaths = imageFilenames.map(f => `${novelDir}${separator}${f}`).join('; ');
+            const imagePathsInput = prompt(
+                `请确认图片文件路径（用分号分隔，或留空使用默认路径）：\n\n图片文件名：${imageFilenames.join(', ')}\n\n默认路径：${defaultPaths}`,
+                imageFilenames.map(f => `${novelDir}${separator}${f}`).join(';')
+            );
+            
+            if (imagePathsInput) {
+                paths.imagePaths = imagePathsInput.split(';').map(p => p.trim()).filter(p => p);
+            } else {
+                // 使用默认路径
+                imageFilenames.forEach(filename => {
+                    paths.imagePaths.push(`${novelDir}${separator}${filename}`);
+                });
+            }
+        }
+        
+        return paths;
+    }
+
     // 保存图片到 Eagle
     async function saveToEagle(imageUrls, folderId, details, artworkId) {
         // #region agent log
@@ -1514,6 +1684,9 @@ SOFTWARE.
             }
 
             await saveToEagle(details.originalUrls, targetFolderId, details, artworkId);
+
+            // 保存成功后，使索引失效，下次访问时自动重建
+            invalidateEagleIndex();
 
             const message = [
                 `✅ ${details.illustType === 2 ? "动图已转换为 GIF 并" : "图片已成功"}保存到 Eagle`,
@@ -2613,6 +2786,42 @@ SOFTWARE.
     let isRecAreaInitializing = false;
     let currentRecUrl = ""; // 记录当前监控的 URL，防止重复初始化
 
+    // 索引过期时间：24小时
+    const INDEX_EXPIRE_TIME = 24 * 60 * 60 * 1000; // 24小时（毫秒）
+
+    // 索引序列化：将 Map 转换为可存储的普通对象
+    function serializeIndex(index) {
+        const serialized = {};
+        for (const [uid, data] of index.entries()) {
+            serialized[uid] = {
+                id: data.id,
+                pids: Array.from(data.pids) // Set 转换为 Array
+            };
+        }
+        return serialized;
+    }
+
+    // 索引反序列化：将存储的数据恢复为 Map
+    function deserializeIndex(data) {
+        const index = new Map();
+        for (const [uid, value] of Object.entries(data)) {
+            index.set(uid, {
+                id: value.id,
+                pids: new Set(value.pids) // Array 转换为 Set
+            });
+        }
+        return index;
+    }
+
+    // 使索引失效（清除缓存）
+    function invalidateEagleIndex() {
+        // 清除持久化存储
+        GM_setValue("eagleIndex", null);
+        // 清除 window 对象上的索引
+        window.__pixiv2eagle_globalEagleIndex = null;
+        window.__pixiv2eagle_eagleIndexLoadingPromise = null;
+    }
+
     // 使用 window 对象存储索引，避免页面导航时被重置
     if (typeof window.__pixiv2eagle_globalEagleIndex === 'undefined') {
         window.__pixiv2eagle_globalEagleIndex = null;
@@ -2622,17 +2831,53 @@ SOFTWARE.
     }
 
     // 异步构建 Eagle 索引 (单例模式)
-    async function ensureEagleIndex() {
+    async function ensureEagleIndex(forceRefresh = false) {
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2578',message:'ensureEagleIndex entry',data:{hasGlobalIndex:!!window.__pixiv2eagle_globalEagleIndex,hasLoadingPromise:!!window.__pixiv2eagle_eagleIndexLoadingPromise},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2578',message:'ensureEagleIndex entry',data:{hasGlobalIndex:!!window.__pixiv2eagle_globalEagleIndex,hasLoadingPromise:!!window.__pixiv2eagle_eagleIndexLoadingPromise,forceRefresh},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
         // #endregion
+        
+        // 如果强制刷新，清除缓存
+        if (forceRefresh) {
+            invalidateEagleIndex();
+        }
+
+        // 优先使用内存中的索引
         if (window.__pixiv2eagle_globalEagleIndex) return window.__pixiv2eagle_globalEagleIndex;
         if (window.__pixiv2eagle_eagleIndexLoadingPromise) return window.__pixiv2eagle_eagleIndexLoadingPromise;
+
+        // 尝试从持久化存储加载索引
+        const pixivFolderId = getFolderId();
+        if (!forceRefresh && pixivFolderId) {
+            try {
+                const cachedData = GM_getValue("eagleIndex", null);
+                if (cachedData && cachedData.index && cachedData.expireTime && cachedData.pixivFolderId) {
+                    const now = Date.now();
+                    // 检查是否过期且文件夹ID匹配
+                    if (now < cachedData.expireTime && cachedData.pixivFolderId === pixivFolderId) {
+                        // 索引未过期，反序列化并返回
+                        const index = deserializeIndex(cachedData.index);
+                        window.__pixiv2eagle_globalEagleIndex = index;
+                        console.log(`[Pixiv2Eagle] 从缓存加载 Eagle 索引，包含 ${index.size} 位画师`);
+                        return index;
+                    } else {
+                        // 索引已过期或文件夹ID不匹配，清除缓存
+                        if (now >= cachedData.expireTime) {
+                            console.log("[Pixiv2Eagle] 索引已过期，重新构建...");
+                        } else {
+                            console.log("[Pixiv2Eagle] 文件夹ID不匹配，重新构建索引...");
+                        }
+                        invalidateEagleIndex();
+                    }
+                }
+            } catch (e) {
+                console.warn("[Pixiv2Eagle] 加载缓存索引失败:", e);
+                invalidateEagleIndex();
+            }
+        }
 
         console.log("[Pixiv2Eagle] 正在构建全局 Eagle 索引...");
         window.__pixiv2eagle_eagleIndexLoadingPromise = (async () => {
             const index = new Map();
-            const pixivFolderId = getFolderId();
             // #region agent log
             fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2586',message:'Index building started',data:{hasPixivFolderId:!!pixivFolderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
             // #endregion
@@ -2696,6 +2941,20 @@ SOFTWARE.
                     fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2633',message:'Index building completed',data:{indexSize:index.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
                     // #endregion
                     console.log(`[Pixiv2Eagle] 全局 Eagle 索引构建完成，包含 ${index.size} 位画师`);
+                    
+                    // 持久化索引到存储
+                    try {
+                        const expireTime = Date.now() + INDEX_EXPIRE_TIME;
+                        const serializedIndex = serializeIndex(index);
+                        GM_setValue("eagleIndex", {
+                            index: serializedIndex,
+                            expireTime: expireTime,
+                            pixivFolderId: pixivFolderId
+                        });
+                        console.log(`[Pixiv2Eagle] 索引已保存，将在 ${new Date(expireTime).toLocaleString()} 过期`);
+                    } catch (e) {
+                        console.warn("[Pixiv2Eagle] 保存索引失败:", e);
+                    }
                 }
             } catch (e) {
                 // #region agent log
@@ -2987,6 +3246,134 @@ SOFTWARE.
         return urlParams.get("id");
     }
 
+    // 组合小说内容（根据是否包含图片生成 TXT 或 Markdown）
+    function combineNovelContent(details) {
+        if (!details.hasImages || !details.images || details.images.length === 0) {
+            // 纯文本格式
+            return {
+                content: details.content,
+                format: 'txt',
+                images: []
+            };
+        }
+        
+        // Markdown 格式
+        const contentContainer = document.querySelector(NOVEL_CONTENT_SELECTOR);
+        if (!contentContainer) {
+            return {
+                content: details.content,
+                format: 'txt',
+                images: []
+            };
+        }
+        
+        // 构建 Markdown 内容，保持文本和图片的原始顺序
+        let markdownContent = "";
+        const allElements = Array.from(contentContainer.children);
+        
+        // 创建图片 URL 到索引的映射
+        const imageUrlToIndex = new Map();
+        details.images.forEach((img, index) => {
+            imageUrlToIndex.set(img.src, index);
+        });
+        
+        let imageIndex = 0;
+        
+        // 遍历所有子元素，保持顺序
+        for (const element of allElements) {
+            // 检查元素中是否包含图片
+            const imagesInElement = Array.from(element.querySelectorAll("img"));
+            
+            if (imagesInElement.length > 0) {
+                // 如果元素包含图片，需要分别处理文本和图片
+                const textNodes = Array.from(element.childNodes).filter(
+                    node => node.nodeType === Node.TEXT_NODE || (node.nodeType === Node.ELEMENT_NODE && node.tagName !== "IMG")
+                );
+                
+                // 添加文本内容
+                for (const textNode of textNodes) {
+                    if (textNode.nodeType === Node.TEXT_NODE) {
+                        const text = textNode.textContent.trim();
+                        if (text) {
+                            markdownContent += text + "\n\n";
+                        }
+                    } else if (textNode.tagName === "P") {
+                        const text = textNode.textContent.trim();
+                        if (text) {
+                            markdownContent += text + "\n\n";
+                        }
+                    }
+                }
+                
+                // 添加图片引用
+                for (const img of imagesInElement) {
+                    const src = img.src || img.getAttribute("data-src") || "";
+                    const alt = img.alt || img.getAttribute("alt") || "";
+                    
+                    if (src && imageUrlToIndex.has(src)) {
+                        const idx = imageUrlToIndex.get(src);
+                        const urlMatch = src.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i);
+                        const ext = urlMatch ? urlMatch[1].toLowerCase() : "jpg";
+                        const filename = `image_${idx}.${ext}`;
+                        
+                        markdownContent += `![${alt}](${filename})\n\n`;
+                        imageIndex++;
+                    }
+                }
+            } else if (element.tagName === "P") {
+                // 普通段落
+                const text = element.textContent.trim();
+                if (text) {
+                    markdownContent += text + "\n\n";
+                }
+            } else if (element.tagName === "IMG") {
+                // 单独的图片元素
+                const src = element.src || element.getAttribute("data-src") || "";
+                const alt = element.alt || element.getAttribute("alt") || "";
+                
+                if (src && imageUrlToIndex.has(src)) {
+                    const idx = imageUrlToIndex.get(src);
+                    const urlMatch = src.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i);
+                    const ext = urlMatch ? urlMatch[1].toLowerCase() : "jpg";
+                    const filename = `image_${idx}.${ext}`;
+                    
+                    markdownContent += `![${alt}](${filename})\n\n`;
+                    imageIndex++;
+                }
+            } else if (element.textContent.trim()) {
+                // 其他包含文本的元素
+                const text = element.textContent.trim();
+                markdownContent += text + "\n\n";
+            }
+        }
+        
+        // 如果没有成功构建 Markdown，回退到纯文本
+        if (!markdownContent.trim()) {
+            return {
+                content: details.content,
+                format: 'txt',
+                images: []
+            };
+        }
+        
+        // 准备图片信息
+        const imageInfo = details.images.map((img, index) => {
+            const urlMatch = img.src.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i);
+            const ext = urlMatch ? urlMatch[1].toLowerCase() : "jpg";
+            return {
+                url: img.src,
+                filename: `image_${index}.${ext}`,
+                alt: img.alt
+            };
+        });
+        
+        return {
+            content: markdownContent.trim(),
+            format: 'md',
+            images: imageInfo
+        };
+    }
+
     // 获取小说详细信息
     async function getNovelDetails(novelId) {
         try {
@@ -3003,7 +3390,7 @@ SOFTWARE.
             const coverUrl = coverImg ? coverImg.src : null;
 
             // 作者
-            const authorLink = document.querySelector(NOVEL_AUTHOR_LINK_SELECTOR);
+            const authorLink = document.querySelector(NOVEL_AUTHOR_SELECTOR);
             const authorId = authorLink ? authorLink.getAttribute("data-gtm-value") : null;
             const authorName = authorLink ? authorLink.textContent.trim() : "Unknown";
 
@@ -3026,7 +3413,41 @@ SOFTWARE.
             // 内容
             const contentContainer = document.querySelector(NOVEL_CONTENT_SELECTOR);
             let content = "";
+            const images = [];
+            let hasImages = false;
+            
             if (contentContainer) {
+                // 检查是否包含图片
+                const imgElements = Array.from(contentContainer.querySelectorAll("img"));
+                hasImages = imgElements.length > 0;
+                
+                // 提取图片信息
+                if (hasImages) {
+                    imgElements.forEach((img, index) => {
+                        const src = img.src || img.getAttribute("data-src") || "";
+                        const alt = img.alt || img.getAttribute("alt") || "";
+                        if (src) {
+                            images.push({
+                                src: src,
+                                alt: alt,
+                                index: index
+                            });
+                        }
+                    });
+                }
+                
+                // 提取文本内容（忽略开头空白div，提取后续p标签）
+                const allElements = Array.from(contentContainer.children);
+                let startIndex = 0;
+                // 跳过开头的空白div
+                for (let i = 0; i < allElements.length; i++) {
+                    const el = allElements[i];
+                    if (el.tagName === "P" || el.textContent.trim()) {
+                        startIndex = i;
+                        break;
+                    }
+                }
+                
                 const paragraphs = Array.from(contentContainer.querySelectorAll("p"));
                 content = paragraphs.map(p => p.textContent).join("\n");
             }
@@ -3041,6 +3462,8 @@ SOFTWARE.
                 seriesId,
                 seriesTitle,
                 content,
+                images,
+                hasImages,
                 illustType: "novel"
             };
         } catch (error) {
@@ -3155,26 +3578,81 @@ SOFTWARE.
                 });
             }
 
-            // 5.3 正文
+            // 5.3 正文 - 使用 addFromPath API
             if (details.content) {
-                const contentBlob = new Blob([details.content], { type: "text/plain" });
-                const contentDataUrl = await blobToDataURL(contentBlob);
-                const base64 = contentDataUrl.split(",")[1];
-                const safeTitle = details.title.replace(/[\\/:*?"<>|]/g, "_");
+                // 组合小说内容
+                const combinedContent = combineNovelContent(details);
                 
-                await gmFetch("http://localhost:41595/api/item/add", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        name: safeTitle,
-                        ext: "txt",
-                        base64: base64,
-                        website: `https://www.pixiv.net/novel/show.php?id=${details.id}`,
-                        annotation: details.id,
-                        tags: [],
-                        folderId: chapterFolderId
-                    })
+                // 下载文件到本地
+                showMessage("正在下载小说文件，请选择保存位置...", false);
+                const downloadedFiles = await downloadNovelFiles(combinedContent, details.title, details.id);
+                
+                // 等待用户下载完成
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                
+                // 获取文件路径
+                const basePath = getNovelSavePath();
+                const filePaths = await getFilePaths(downloadedFiles.novelFilename, downloadedFiles.imageFilenames, basePath);
+                
+                // 使用 addFromPath 批量添加文件（小说文件 + 图片文件）
+                const novelExt = combinedContent.format === 'md' ? 'md' : 'txt';
+                const safeTitle = details.title.replace(/[\\/:*?"<>|]/g, "_");
+                const novelUrl = `https://www.pixiv.net/novel/show.php?id=${details.id}`;
+                
+                // 构建 items 数组
+                const items = [];
+                
+                // 添加小说文件
+                items.push({
+                    path: filePaths.novelPath,
+                    name: `${safeTitle}.${novelExt}`,
+                    website: novelUrl,
+                    annotation: details.id,
+                    tags: [],
+                    folderId: chapterFolderId
                 });
+                
+                // 添加所有图片文件（如果有）
+                if (filePaths.imagePaths.length > 0 && combinedContent.images) {
+                    for (let i = 0; i < filePaths.imagePaths.length; i++) {
+                        const imagePath = filePaths.imagePaths[i];
+                        const imageInfo = combinedContent.images[i];
+                        
+                        if (imagePath && imageInfo) {
+                            items.push({
+                                path: imagePath,
+                                name: imageInfo.filename,
+                                website: novelUrl,
+                                annotation: details.id,
+                                tags: [],
+                                folderId: chapterFolderId
+                            });
+                        }
+                    }
+                }
+                
+                // 逐个添加文件（Eagle API addFromPath 可能不支持批量添加）
+                if (items.length > 0) {
+                    try {
+                        for (const item of items) {
+                            const addResult = await gmFetch("http://localhost:41595/api/item/addFromPath", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify(item)
+                            });
+                            
+                            if (!addResult || !addResult.status) {
+                                if (getDebugMode()) {
+                                    console.error("[Pixiv2Eagle] 添加文件失败:", item.path, addResult);
+                                }
+                                throw new Error(`添加文件到 Eagle 失败: ${item.name || item.path}`);
+                            }
+                        }
+                    } catch (error) {
+                        console.error("添加小说文件到 Eagle 失败:", error);
+                        throw error;
+                    }
+                }
             }
 
             showMessage(`✅ 小说 "${details.title}" 已保存到 Eagle`);
@@ -3278,7 +3756,7 @@ SOFTWARE.
         const oldWrapper = document.getElementById(EAGLE_SAVE_BUTTON_ID);
         if (oldWrapper) return;
 
-        const targetSection = await waitForElement(NOVEL_BUTTON_SECTION_SELECTOR);
+        const targetSection = await waitForElement(NOVEL_SAVE_BUTTON_SECTION_SELECTOR);
         if (!targetSection) return;
 
         // 双重检查，防止在等待过程中重复创建
