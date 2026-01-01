@@ -1,4 +1,4 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name            Pixiv2Eagle
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
@@ -554,6 +554,9 @@ SOFTWARE.
 
     // 检查 Eagle 是否运行
     async function checkEagle() {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:402',message:'checkEagle entry',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         try {
             // 添加超时处理（5秒）
             const timeoutPromise = new Promise((_, reject) => {
@@ -565,11 +568,17 @@ SOFTWARE.
                 timeoutPromise
             ]);
             
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:405',message:'Eagle API call success',data:{status:data?.status,hasVersion:!!data?.data?.version,version:data?.data?.version},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             return {
                 running: true,
                 version: data.data.version,
             };
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:410',message:'Eagle API call failed',data:{errorName:error?.name,errorMessage:error?.message,errorStack:error?.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error("Eagle 未启动或无法连接:", error);
             return {
                 running: false,
@@ -580,6 +589,9 @@ SOFTWARE.
 
     // 查询 Eagle 中是否已保存指定作品
     async function isArtworkSavedInEagle(artworkId, folderId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:419',message:'isArtworkSavedInEagle entry',data:{artworkId,folderId,hasFolderId:!!folderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         if (!folderId) {
             return { saved: false, itemId: null };
         }
@@ -598,7 +610,13 @@ SOFTWARE.
                     offset: offset.toString(),
                 });
 
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:438',message:'Before item/list API call',data:{offset,loopCount,limit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 const data = await gmFetch(`http://localhost:41595/api/item/list?${params.toString()}`);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:439',message:'After item/list API call',data:{status:data?.status,hasData:!!data?.data,isArray:Array.isArray(data?.data),itemsCount:Array.isArray(data?.data)?data.data.length:(data?.data?.items?.length||0)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 if (!data || !data.status) break;
 
                 const items = Array.isArray(data.data)
@@ -613,6 +631,9 @@ SOFTWARE.
                 // 2. 深度检查：如果列表没找到，遍历调用 /api/item/info 获取详细信息对比
                 // (优化：解决列表接口可能返回不完整或缓存数据的问题)
                 if (!matched && items.length > 0) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:452',message:'Starting deep check',data:{itemsCount:items.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     const concurrency = 5; // 并发数限制
                     for (let i = 0; i < items.length; i += concurrency) {
                         const chunk = items.slice(i, i + concurrency);
@@ -634,6 +655,9 @@ SOFTWARE.
                 }
 
                 if (matched) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:473',message:'Artwork found in Eagle',data:{itemId:matched.id,loopCount,offset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     return {
                         saved: true,
                         itemId: matched.id,
@@ -645,9 +669,15 @@ SOFTWARE.
                 loopCount += 1;
             }
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:485',message:'isArtworkSavedInEagle error',data:{errorName:error?.name,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error("检测作品保存状态失败:", error);
         }
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:488',message:'Artwork not found in Eagle',data:{artworkId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         return { saved: false, itemId: null };
     }
 
@@ -1433,8 +1463,14 @@ SOFTWARE.
     // 动态加载 JSZip 库到用户脚本沙箱
     async function ensureJSZipLoaded() {
         if (window.JSZip) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1329',message:'JSZip already loaded',data:{hasJSZip:!!window.JSZip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             return;
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1332',message:'Loading JSZip from CDN',data:{useDomestic:USE_DOMESTIC_CDN},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         // 使用 3.1.5 版本，因为 3.2.x+ 版本存在性能问题
         const jsZipUrl = USE_DOMESTIC_CDN 
             ? "https://cdn.jsdmirror.com/npm/jszip@3.1.5/dist/jszip.min.js"
@@ -1442,20 +1478,35 @@ SOFTWARE.
         let code;
         try {
             code = await gmFetchText(jsZipUrl);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1334',message:'JSZip code loaded',data:{codeLength:code?.length||0,hasCode:!!code},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             if (!code || code.length === 0) {
                 throw new Error(`JSZip 代码加载失败：代码为空 (URL: ${jsZipUrl})`);
             }
         } catch (fetchError) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1478',message:'JSZip fetch error',data:{errorName:fetchError?.name,errorMessage:fetchError?.message,url:jsZipUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             throw new Error(`JSZip 代码加载失败：${fetchError?.message || '未知错误'} (URL: ${jsZipUrl})`);
         }
         
         try {
             eval(code);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1336',message:'After eval JSZip code',data:{hasJSZip:!!window.JSZip,jsZipType:typeof window.JSZip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
         } catch (evalError) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1485',message:'JSZip eval error',data:{errorName:evalError?.name,errorMessage:evalError?.message,errorStack:evalError?.stack?.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             throw new Error(`JSZip 代码执行失败：${evalError?.message || '未知错误'}`);
         }
         
         if (!window.JSZip) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1490',message:'JSZip not available after eval',data:{hasJSZip:!!window.JSZip,windowKeys:Object.keys(window).filter(k => k.toLowerCase().includes('zip')).slice(0,10)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             throw new Error("JSZip 加载失败：eval 后 window.JSZip 不存在");
         }
     }
@@ -1618,7 +1669,13 @@ SOFTWARE.
 
     // 获取小说保存格式
     function getNovelSaveFormat() {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1475',message:'getNovelSaveFormat entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         const format = GM_getValue("novelSaveFormat", "txt"); // 默认 txt
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1476',message:'getNovelSaveFormat return',data:{format},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         return format;
     }
 
@@ -1731,6 +1788,9 @@ SOFTWARE.
 
     // 保存图片到 Eagle
     async function saveToEagle(imageUrls, folderId, details, artworkId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1360',message:'saveToEagle entry',data:{artworkId,folderId,imageUrlCount:imageUrls?.length,illustType:details?.illustType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         async function getUgoiraUrl(artworkId) {
             const gifBlob = await convertUgoiraToGifBlob(artworkId);
             const [base64, dataURL] = await (async () => {
@@ -1759,6 +1819,9 @@ SOFTWARE.
         const shouldSaveDescription = getSaveDescription();
         const annotation = shouldSaveDescription ? details.description : undefined;
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1390',message:'Before Eagle API call',data:{folderId,itemCount:imageUrls.length,isUgoira,isMultiPage},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         // 批量添加图片
         const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
             method: "POST",
@@ -1783,7 +1846,13 @@ SOFTWARE.
             }),
         });
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1413',message:'After Eagle API call',data:{status:data?.status,hasData:!!data?.data,dataLength:data?.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         if (!data.status) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1414',message:'Save failed - status false',data:{status:data?.status,data:JSON.stringify(data).substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             throw new Error("保存图片失败");
         }
 
@@ -2993,6 +3062,9 @@ SOFTWARE.
 
     // 异步构建 Eagle 索引 (单例模式)
     async function ensureEagleIndex(forceRefresh = false) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2578',message:'ensureEagleIndex entry',data:{hasGlobalIndex:!!window.__pixiv2eagle_globalEagleIndex,hasLoadingPromise:!!window.__pixiv2eagle_eagleIndexLoadingPromise,forceRefresh},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         
         // 如果强制刷新，清除缓存
         if (forceRefresh) {
@@ -3036,10 +3108,19 @@ SOFTWARE.
         console.log("[Pixiv2Eagle] 正在构建全局 Eagle 索引...");
         window.__pixiv2eagle_eagleIndexLoadingPromise = (async () => {
             const index = new Map();
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2586',message:'Index building started',data:{hasPixivFolderId:!!pixivFolderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             if (!pixivFolderId) return index;
 
             try {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2589',message:'Before folder/list API call',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
                 const folderList = await gmFetch("http://localhost:41595/api/folder/list");
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2590',message:'After folder/list API call',data:{status:folderList?.status,isArray:Array.isArray(folderList?.data),dataLength:folderList?.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
                 if (folderList.status && Array.isArray(folderList.data)) {
                     const findFolder = (folders, id) => {
                         for (const f of folders) {
@@ -3052,6 +3133,9 @@ SOFTWARE.
                         return null;
                     };
                     const root = findFolder(folderList.data, pixivFolderId);
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2601',message:'Root folder found',data:{hasRoot:!!root,hasChildren:!!root?.children,childrenCount:root?.children?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     
                     if (root && root.children) {
                         for (const artistFolder of root.children) {
@@ -3083,6 +3167,9 @@ SOFTWARE.
                             }
                         }
                     }
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2633',message:'Index building completed',data:{indexSize:index.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     console.log(`[Pixiv2Eagle] 全局 Eagle 索引构建完成，包含 ${index.size} 位画师`);
                     
                     // 持久化索引到存储
@@ -3100,6 +3187,9 @@ SOFTWARE.
                     }
                 }
             } catch (e) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2635',message:'Index building error',data:{errorName:e?.name,errorMessage:e?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
                 console.error("[Pixiv2Eagle] 构建 Eagle 索引失败:", e);
             }
             return index;
@@ -3107,7 +3197,13 @@ SOFTWARE.
 
         try {
             window.__pixiv2eagle_globalEagleIndex = await window.__pixiv2eagle_eagleIndexLoadingPromise;
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2642',message:'Index loaded successfully',data:{indexSize:window.__pixiv2eagle_globalEagleIndex?.size},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
         } catch (e) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2643',message:'Index loading error',data:{errorName:e?.name,errorMessage:e?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error(e);
             window.__pixiv2eagle_eagleIndexLoadingPromise = null; // 允许重试
         }
@@ -3194,6 +3290,9 @@ SOFTWARE.
 
                 // 确保索引已就绪
                 if (!window.__pixiv2eagle_globalEagleIndex) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2729',message:'Index not ready',data:{pid,uid},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     pendingLis.add(li); // 索引未就绪，加入重试队列
                     return;
                 }
@@ -3203,6 +3302,9 @@ SOFTWARE.
                 
                 // 情况 1: 画师不在 Eagle 中 -> 肯定未保存 -> 标记为已检查
                 if (!artistData) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2738',message:'Artist not in Eagle',data:{pid,uid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 不在 Eagle 中 -> 未保存`);
                     li.dataset.eagleChecked = "1";
                     pendingLis.delete(li);
@@ -3211,18 +3313,27 @@ SOFTWARE.
 
                 // 情况 2: 画师在 Eagle 中，检查作品 PID
                 if (artistData.pids.has(pid)) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2746',message:'Artwork found in index',data:{pid,uid,indexSize:window.__pixiv2eagle_globalEagleIndex.size},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     const success = addBadge(li, pid);
                     if (success) {
                         li.dataset.eagleChecked = "1"; // 标记成功才设为 checked
                         pendingLis.delete(li);
                         console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记成功`);
                     } else {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2754',message:'Badge add failed',data:{pid,uid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                        // #endregion
                         // 标记失败（如找不到容器），加入重试队列
                         console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记失败 (找不到容器)，加入重试`);
                         pendingLis.add(li);
                     }
                 } else {
                     // 情况 3: 作品未保存 -> 标记为已检查
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2758',message:'Artwork not in index',data:{pid,uid,hasPids:!!artistData.pids,pidsSize:artistData.pids?.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 在 Eagle 中，但作品未保存`);
                     li.dataset.eagleChecked = "1";
                     pendingLis.delete(li);
@@ -3231,6 +3342,9 @@ SOFTWARE.
 
             // 3. 添加标记函数
             const addBadge = (li, pid) => {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2766',message:'addBadge entry',data:{pid,hasLi:!!li},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 // 寻找缩略图容器
                 let target = li.querySelector(REC_THUMBNAIL_SELECTOR);
                 if (!target) target = li.querySelector('div.sc-f44a0b30-9');
@@ -3245,6 +3359,9 @@ SOFTWARE.
                     if (img) target = img.parentElement;
                 }
 
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2781',message:'Target container check',data:{hasTarget:!!target,targetTag:target?.tagName,targetClass:target?.className?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 if (!target) return false;
 
                 if (target.querySelector('.eagle-saved-badge')) return true;
@@ -3270,6 +3387,9 @@ SOFTWARE.
                     target.style.position = 'relative';
                 }
                 target.appendChild(badge);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2806',message:'Badge added successfully',data:{pid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 return true;
             };
 
@@ -3486,6 +3606,9 @@ SOFTWARE.
 
     // 生成 EPUB 电子书
     async function generateEPUB(details, combinedContent, progressWindow = null) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3412',message:'generateEPUB entry',data:{hasDetails:!!details,hasCombinedContent:!!combinedContent,format:combinedContent?.format},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         
         // 检查是否已取消
         if (progressWindow && progressWindow.isCancelled()) {
@@ -3497,13 +3620,22 @@ SOFTWARE.
         }
         
         // 确保 JSZip 已加载
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3415',message:'Before ensureJSZipLoaded',data:{hasJSZip:!!window.JSZip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         await ensureJSZipLoaded();
         
         if (progressWindow) {
             progressWindow.updateProgress(10, '正在创建 EPUB 结构...');
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3417',message:'After ensureJSZipLoaded',data:{hasJSZip:!!window.JSZip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         
         const zip = new window.JSZip();
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3420',message:'JSZip instance created',data:{hasZip:!!zip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         const safeTitle = details.title.replace(/[\\/:*?"<>|]/g, "_");
         
         // 1. 添加 mimetype 文件（必须是第一个，且不压缩）
@@ -3794,12 +3926,28 @@ p {
         }
         
         // 10. 生成 EPUB 文件（Blob）
+        // #region agent log
+        const zipFilesList = Object.keys(zip.files || {});
+        const zipFilesInfo = zipFilesList.slice(0, 20).map(name => {
+            const file = zip.files[name];
+            return {
+                name: name,
+                dir: file ? file.dir : false,
+                date: file ? file.date : null,
+                options: file ? file.options : null
+            };
+        });
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3904',message:'Before zip.generateAsync',data:{hasZip:!!zip,zipType:typeof zip.generateAsync,zipFilesCount:zipFilesList.length,zipFilesInfo:zipFilesInfo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         let epubBlob;
         try {
             // 添加超时处理（120秒，因为 EPUB 生成可能需要一些时间）
             // 暂时注释掉超时处理
             // const timeoutPromise = new Promise((_, reject) => {
             //     setTimeout(() => {
+            //         // #region agent log
+            //         fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3712',message:'Timeout triggered',data:{elapsed:120000},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            //         // #endregion
             //         reject(new Error("EPUB 生成超时（120秒）"));
             //     }, 120000);
             // });
@@ -3825,6 +3973,9 @@ p {
                     }
                 }
             }
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3921',message:'About to call zip.generateAsync',data:{hasZip:!!zip,hasGenerateAsync:typeof zip.generateAsync === 'function',allFilesReady:allFilesReady,fileCheckResults:fileCheckResults},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             
             if (!allFilesReady) {
                 throw new Error("某些文件数据未准备好");
@@ -3838,6 +3989,9 @@ p {
                 mimeType: "application/epub+zip",
                 onUpdate: (metadata) => {
                     const now = Date.now();
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3935',message:'generateAsync onUpdate callback',data:{percent:metadata.percent,currentFile:metadata.currentFile,remainingFiles:metadata.remainingFiles,elapsed:now-generateStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                    // #endregion
                     lastUpdateTime = now;
                     if (progressWindow) {
                         const progressPercent = 80 + Math.floor(metadata.percent * 0.2); // 80-100%
@@ -3845,6 +3999,9 @@ p {
                     }
                 }
             });
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3927',message:'generatePromise created',data:{hasPromise:!!generatePromise,startTime:generateStartTime,streamFiles:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             
             // 定期检查取消状态和更新进度，同时记录等待时间
             // 如果 onUpdate 回调长时间未触发，说明可能卡住了
@@ -3863,14 +4020,30 @@ p {
                     } else {
                         progressWindow.updateProgress(85, `正在压缩 EPUB 文件... (已等待 ${Math.floor(waitTime/1000)} 秒)`);
                     }
+                    // #region agent log
+                    if (waitTime % 5000 === 0) { // 每5秒记录一次
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3956',message:'Still waiting for generateAsync',data:{waitTime,elapsed:Date.now()-generateStartTime,timeSinceLastUpdate},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                    }
+                    // #endregion
                 }
             }, 500) : null;
             
             try {
                 // 暂时移除超时，直接等待 generatePromise
                 // epubBlob = await Promise.race([generatePromise, timeoutPromise]);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3943',message:'About to await generatePromise',data:{startTime:generateStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                // #endregion
                 epubBlob = await generatePromise;
+                // #region agent log
+                const generateEndTime = Date.now();
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3945',message:'generatePromise resolved',data:{elapsed:generateEndTime-generateStartTime,hasBlob:!!epubBlob,blobSize:epubBlob?.size||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                // #endregion
             } catch (awaitError) {
+                // #region agent log
+                const generateEndTime = Date.now();
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3948',message:'generatePromise rejected',data:{elapsed:generateEndTime-generateStartTime,errorName:awaitError?.name,errorMessage:awaitError?.message,errorStack:awaitError?.stack?.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                // #endregion
                 throw awaitError;
             } finally {
                 if (progressInterval) {
@@ -3886,7 +4059,13 @@ p {
             if (progressWindow) {
                 progressWindow.updateProgress(100, 'EPUB 生成完成！');
             }
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3727',message:'After zip.generateAsync',data:{hasBlob:!!epubBlob,blobSize:epubBlob?.size||0,blobType:epubBlob?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
         } catch (genError) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3730',message:'zip.generateAsync error',data:{errorName:genError?.name,errorMessage:genError?.message,errorStack:genError?.stack?.substring(0,300)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             throw genError;
         }
         
@@ -3942,6 +4121,9 @@ p {
 
             // 内容 - 尝试多种选择器
             let contentContainer = document.querySelector(NOVEL_CONTENT_SELECTOR);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3737',message:'getNovelDetails content extraction - primary selector',data:{hasContentContainer:!!contentContainer,selector:NOVEL_CONTENT_SELECTOR},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
             
             // 如果主选择器失败，尝试备用选择器
             if (!contentContainer) {
@@ -3955,6 +4137,9 @@ p {
                 for (const selector of partialSelectors) {
                     contentContainer = document.querySelector(selector);
                     if (contentContainer) {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3745',message:'Content container found with fallback selector',data:{selector,className:contentContainer.className},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         break;
                     }
                 }
@@ -3970,6 +4155,9 @@ p {
                         const textLength = Array.from(paragraphs).reduce((sum, p) => sum + (p.textContent?.length || 0), 0);
                         if (textLength > 100) {  // 总文本长度超过 100 字符
                             contentContainer = div;
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3758',message:'Content container found by paragraph search',data:{paragraphCount:paragraphs.length,textLength,className:div.className},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                            // #endregion
                             break;
                         }
                     }
@@ -3984,6 +4172,9 @@ p {
                 // 检查是否包含图片
                 const imgElements = Array.from(contentContainer.querySelectorAll("img"));
                 hasImages = imgElements.length > 0;
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3745',message:'Content container found',data:{hasImages,imageCount:imgElements.length,childrenCount:contentContainer.children.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
                 
                 // 提取图片信息
                 if (hasImages) {
@@ -4013,8 +4204,17 @@ p {
                 }
                 
                 const paragraphs = Array.from(contentContainer.querySelectorAll("p"));
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3774',message:'Paragraph extraction',data:{paragraphCount:paragraphs.length,allElementsCount:allElements.length,startIndex},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
                 content = paragraphs.map(p => p.textContent).join("\n");
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3775',message:'Content extracted',data:{contentLength:content.length,contentPreview:content.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
             } else {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3776',message:'Content container not found',data:{selector:NOVEL_CONTENT_SELECTOR},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
             }
 
             return {
@@ -4117,21 +4317,48 @@ p {
 
     // 保存当前小说到 Eagle
     async function saveCurrentNovel() {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3861',message:'saveCurrentNovel entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         const folderId = getFolderId();
         const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : "未设置 Pixiv 文件夹 ID";
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3875',message:'Before await checkEagle',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         let eagleStatus;
         try {
             eagleStatus = await checkEagle();
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3876',message:'After await checkEagle',data:{hasEagleStatus:!!eagleStatus,eagleRunning:eagleStatus?.running,hasRunning:typeof eagleStatus?.running!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3880',message:'checkEagle threw error',data:{errorName:error?.name,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             showMessage(`${folderInfo}\n检查 Eagle 状态时出错: ${error.message}`, true);
             return;
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3883',message:'Before eagleStatus.running check',data:{eagleRunning:eagleStatus?.running},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         if (!eagleStatus || !eagleStatus.running) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3884',message:'Eagle not running, returning',data:{eagleRunning:eagleStatus?.running},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             const errorMsg = `${folderInfo}\nEagle 未启动，请先启动 Eagle 应用！`;
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3898',message:'Calling showMessage with forceShow=true',data:{messageLength:errorMsg.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             showMessage(errorMsg, true);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3900',message:'After showMessage call',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             return;
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3889',message:'Eagle is running, continuing',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
 
         const novelId = getNovelId();
         if (!novelId) {
@@ -4140,7 +4367,13 @@ p {
         }
 
         try {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3877',message:'Before getNovelDetails',data:{novelId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             const details = await getNovelDetails(novelId);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3878',message:'After getNovelDetails',data:{hasDetails:!!details,hasAuthorId:!!details?.authorId,hasContent:!!details?.content},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             if (!details.authorId) {
                 throw new Error("无法获取作者信息");
             }
@@ -4229,34 +4462,86 @@ p {
             }
 
             // 5.3 正文 - 根据配置选择保存格式
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4022',message:'Before content check',data:{hasContent:!!details.content,contentLength:details.content?.length||0,contentPreview:details.content?.substring(0,50)||''},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
             if (details.content) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4025',message:'Content exists, getting save format',data:{hasContent:!!details.content,contentLength:details.content.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 const saveFormat = getNovelSaveFormat();
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3968',message:'After getNovelSaveFormat',data:{saveFormat},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 
                 if (saveFormat === 'epub') {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4032',message:'EPUB format branch',data:{saveFormat},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     // EPUB 格式保存
                     const progressWindow = createEPUBProgressWindow();
                     try {
                         // 组合小说内容
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4041',message:'Before combineNovelContent',data:{hasDetails:!!details,hasContent:!!details.content},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         const combinedContent = combineNovelContent(details);
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4042',message:'After combineNovelContent',data:{format:combinedContent?.format,contentLength:combinedContent?.content?.length||0,imageCount:combinedContent?.images?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         
                         // 生成 EPUB
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4122',message:'Before generateEPUB',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         let epubBlob;
                         try {
                             epubBlob = await generateEPUB(details, combinedContent, progressWindow);
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4126',message:'After generateEPUB',data:{hasBlob:!!epubBlob,blobSize:epubBlob?.size||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                            // #endregion
                         } catch (genError) {
+                            // #region agent log
+                            const errorInfo = {
+                                errorName: genError?.name || 'Unknown',
+                                errorMessage: genError?.message || String(genError),
+                                errorStack: genError?.stack ? genError.stack.substring(0, 500) : 'No stack trace',
+                                errorString: String(genError),
+                                errorType: typeof genError
+                            };
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4129',message:'generateEPUB threw error',data:errorInfo,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                            // #endregion
                             throw genError;
                         }
                         
                         // 下载 EPUB 文件到本地
                 const safeTitle = details.title.replace(/[\\/:*?"<>|]/g, "_");
                         const epubFilename = `${safeTitle}.epub`;
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4135',message:'Before downloadFile',data:{epubFilename,blobSize:epubBlob?.size||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         downloadFile(epubBlob, epubFilename);
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4137',message:'After downloadFile',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         
                         // 等待用户下载完成
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4140',message:'Before 2s delay',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         await new Promise(resolve => setTimeout(resolve, 2000));
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4142',message:'After 2s delay',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         
                         // 获取文件路径
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4145',message:'Before getNovelSavePath',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         const basePath = getNovelSavePath();
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4147',message:'After getNovelSavePath',data:{hasBasePath:!!basePath,basePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         let epubPath;
                         
                         if (basePath) {
@@ -4265,7 +4550,13 @@ p {
                                 ? basePath.slice(0, -1) 
                                 : basePath;
                             epubPath = `${normalizedBasePath}${separator}${epubFilename}`;
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4154',message:'Using basePath for epubPath',data:{epubPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                            // #endregion
                         } else {
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4156',message:'Prompting for epubPath',data:{epubFilename},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                            // #endregion
                             epubPath = prompt(
                                 `请输入 EPUB 文件的完整路径：\n\n文件名：${epubFilename}\n\n示例：C:\\Users\\YourName\\Downloads\\${epubFilename}`,
                                 ""
@@ -4275,10 +4566,16 @@ p {
                                 throw new Error("未提供 EPUB 文件路径");
                             }
                             epubPath = epubPath.trim();
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4164',message:'User provided epubPath',data:{epubPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                            // #endregion
                         }
                         
                         // 使用 addFromPath 添加 EPUB 文件
                         const novelUrl = `https://www.pixiv.net/novel/show.php?id=${details.id}`;
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4078',message:'Before addFromPath API call',data:{epubPath,epubFilename,chapterFolderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         const addResult = await gmFetch("http://localhost:41595/api/item/addFromPath", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -4291,6 +4588,9 @@ p {
                         folderId: chapterFolderId
                     })
                 });
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4091',message:'After addFromPath API call',data:{status:addResult?.status,hasData:!!addResult?.data,result:JSON.stringify(addResult).substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         
                         if (!addResult || !addResult.status) {
                             if (getDebugMode()) {
@@ -4298,7 +4598,20 @@ p {
                             }
                             throw new Error("添加 EPUB 文件到 Eagle 失败");
                         }
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4097',message:'EPUB file added successfully',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                     } catch (error) {
+                        // #region agent log
+                        const errorInfo = {
+                            errorName: error?.name || 'Unknown',
+                            errorMessage: error?.message || String(error),
+                            errorStack: error?.stack ? error.stack.substring(0, 500) : 'No stack trace',
+                            errorString: String(error),
+                            errorType: typeof error
+                        };
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4098',message:'EPUB generation error',data:errorInfo,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         console.error("生成或保存 EPUB 失败:", error);
                         // EPUB 生成失败，不再回退到 TXT/MD 格式
                         // 注释掉回退逻辑，直接抛出错误
@@ -4313,10 +4626,16 @@ p {
                         }
                     }
                 } else {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4105',message:'TXT/MD format branch',data:{saveFormat},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     // TXT/MD 格式保存（原有逻辑）
                     await saveNovelAsTextOrMarkdown(details, null, chapterFolderId);
                 }
             } else {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4110',message:'No content, skipping save',data:{hasContent:!!details.content,contentLength:details.content?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
             }
 
             showMessage(`✅ 小说 "${details.title}" 已保存到 Eagle`);
@@ -4329,6 +4648,9 @@ p {
             }
 
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4031',message:'saveCurrentNovel error caught',data:{errorName:error?.name,errorMessage:error?.message,errorStack:error?.stack?.substring(0,300)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
             console.error(error);
             showMessage(`保存小说失败: ${error.message}`, true);
         }
@@ -4435,7 +4757,13 @@ p {
         buttonWrapper.style.marginTop = "16px";
 
         const saveButton = createPixivStyledButton("保存到 Eagle");
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4161',message:'Button created, adding click listener',data:{hasSaveCurrentNovel:typeof saveCurrentNovel==='function'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         saveButton.addEventListener("click", function(e) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4162',message:'Button click event triggered',data:{eventType:e?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             saveCurrentNovel();
         });
 
