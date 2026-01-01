@@ -2585,11 +2585,10 @@ SOFTWARE.
                 !location.pathname.includes('/series/')
             ) {
                 log('当前页面非 artist illustrations/manga/series 页面，跳过');
-                console.log('[Pixiv2Eagle] 当前页面不匹配条件，跳过');
                 return;
             }
 
-            console.log('[Pixiv2Eagle] 当前页面匹配条件，开始处理');
+            log('当前页面匹配条件，开始处理');
 
             // 确定搜索范围与列表容器
             let listContainer = null;
@@ -2597,7 +2596,7 @@ SOFTWARE.
             // 1. 系列页面
             if (location.pathname.includes('/series/')) {
                 const selector = SERIES_PAGE_LIST_SELECTOR;
-                console.log('[Pixiv2Eagle] 系列页面：尝试定位列表容器', selector);
+                log('系列页面：尝试定位列表容器', selector);
                 // 尝试等待容器出现（最多 5 秒，避免过久阻塞）
                 listContainer = await new Promise(resolve => {
                     const el = document.querySelector(selector);
@@ -2620,7 +2619,7 @@ SOFTWARE.
             else {
                 // 用户提供的选择器: div.sc-bf8cea3f-0.dKbaFf
                 const selector = LIST_CONTAINER_SELECTOR;
-                console.log('[Pixiv2Eagle] 插画/漫画页面：尝试定位列表容器', selector);
+                log('插画/漫画页面：尝试定位列表容器', selector);
                 listContainer = await waitForElement(selector, 5000);
             }
 
@@ -2628,7 +2627,7 @@ SOFTWARE.
 
             if (listContainer) {
                 const lis = listContainer.querySelectorAll('li');
-                console.log(`[Pixiv2Eagle] 在列表容器中找到 ${lis.length} 个作品项`);
+                log(`在列表容器中找到 ${lis.length} 个作品项`);
                 
                 for (const li of lis) {
                     // 查找作品链接提取 PID
@@ -2662,21 +2661,18 @@ SOFTWARE.
                     }
                 }
             } else {
-                console.log('[Pixiv2Eagle] 未找到列表容器，跳过检测');
+                log('未找到列表容器，跳过检测');
                 return;
             }
 
             const artworkIds = Object.keys(anchorMap);
             if (artworkIds.length === 0) {
                 log('未解析到任何 artwork id');
-                console.log('[Pixiv2Eagle] 未解析到任何 artwork id');
                 return;
             }
 
-            console.log('[Pixiv2Eagle] 检测到', artworkIds.length, '个作品链接/目标容器');
-
-            // 移除旧的评分逻辑，直接使用 anchorMap
-            console.log('[Pixiv2Eagle] 解析到 artworkIds:', artworkIds.slice(0, 5).join(','), artworkIds.length > 5 ? '...' : '');
+            log('检测到', artworkIds.length, '个作品链接/目标容器');
+            log('解析到 artworkIds:', artworkIds.slice(0, 5).join(','), artworkIds.length > 5 ? '...' : '');
 
             // 获取画师 ID - 支持 /user/{id} 和 /users/{id} 两种格式
             let artistMatch = location.pathname.match(/^\/users\/(\d+)/);
@@ -2685,23 +2681,20 @@ SOFTWARE.
             }
             const artistId = artistMatch ? artistMatch[1] : null;
             if (!artistId) {
-                log('无法从 URL 解析 artistId');
-                console.log('[Pixiv2Eagle] 无法从 URL 解析 artistId，URL:', location.pathname);
+                log('无法从 URL 解析 artistId，URL:', location.pathname);
                 return;
             }
 
-            console.log('[Pixiv2Eagle] 解析到 artistId:', artistId);
+            log('解析到 artistId:', artistId);
 
             const pixivFolderId = getFolderId();
             const artistFolder = await findArtistFolder(pixivFolderId, artistId);
             if (!artistFolder) {
-                log('未找到对应的画师文件夹，跳过标注');
-                console.log('[Pixiv2Eagle] 未找到对应的画师文件夹（pixivFolderId:', pixivFolderId, '）');
+                log('未找到对应的画师文件夹，跳过标注（pixivFolderId:', pixivFolderId, '）');
                 return;
             }
 
-            log('找到画师文件夹', artistFolder.id, '开始拉取 items');
-            console.log('[Pixiv2Eagle] 找到画师文件夹:', artistFolder.id, '名称:', artistFolder.name);
+            log('找到画师文件夹', artistFolder.id, '名称:', artistFolder.name, '开始拉取 items');
             const items = await getAllEagleItemsInFolder(artistFolder.id);
             
             // 如果开启了按类型保存，还需要拉取类型文件夹中的 items
@@ -2716,7 +2709,7 @@ SOFTWARE.
             }
 
             const urlSet = new Set((items || []).map((it) => it.url));
-            console.log('[Pixiv2Eagle] 画师文件夹(含类型子文件夹)中 items 数量:', items ? items.length : 0);
+            log('画师文件夹(含类型子文件夹)中 items 数量:', items ? items.length : 0);
 
             // 依据规则：
             // - 画师文件夹的 description 中含有 `pid = {artistId}` 用于识别画师（见 findArtistFolder）
@@ -2736,26 +2729,24 @@ SOFTWARE.
                 }
             })(artistFolder);
             log('已收集到的子文件夹描述数量:', folderDescSet.size);
-            console.log('[Pixiv2Eagle] 已收集到的子文件夹描述数量:', folderDescSet.size);
 
             // 如果是系列页面，优先查找系列文件夹并在该文件夹下递归寻找 item/url 与子文件夹描述（备注为 pid）
             if (location.pathname.includes('/series/')) {
                 // 尝试添加更新按钮
                 addUpdateSeriesButton();
 
-                console.log('[Pixiv2Eagle] 检测到系列页面，开始处理系列文件夹');
+                log('检测到系列页面，开始处理系列文件夹');
                 try {
                     const seriesMatch = location.pathname.match(/\/series\/(\d+)/);
                     const seriesId = seriesMatch ? seriesMatch[1] : null;
-                    console.log('[Pixiv2Eagle] 系列ID:', seriesId);
+                    log('系列ID:', seriesId);
                     if (seriesId) {
                         // 重新获取画师文件夹的最新数据（包含完整的子文件夹树）
                         const updatedArtistFolder = await findArtistFolder(pixivFolderId, artistId);
                         if (!updatedArtistFolder) {
                             log('系列页面但无法重新获取画师文件夹');
-                            console.log('[Pixiv2Eagle] 系列页面但无法重新获取画师文件夹');
                         } else {
-                            console.log('[Pixiv2Eagle] 已重新获取画师文件夹，查找系列文件夹');
+                            log('已重新获取画师文件夹，查找系列文件夹');
                             // 1. 在画师根目录下找系列
                             let seriesFolder = findSeriesFolderInArtist(updatedArtistFolder, artistId, seriesId);
                             
@@ -2769,14 +2760,13 @@ SOFTWARE.
                             }
 
                             if (seriesFolder) {
-                                console.log('[Pixiv2Eagle] 找到系列文件夹:', seriesFolder.id, '，名称:', seriesFolder.name);
-                                log('在系列页面找到对应的 Eagle 系列文件夹', seriesFolder.id, '，将递归检查其 items 与子文件夹描述');
+                                log('找到系列文件夹:', seriesFolder.id, '，名称:', seriesFolder.name, '，将递归检查其 items 与子文件夹描述');
                                 // 递归获取系列文件夹下所有层级的 items
                                 async function collectSeriesFolderItems(folder) {
                                     if (!folder || !folder.id) return;
                                     try {
                                         const folderItems = await getAllEagleItemsInFolder(folder.id);
-                                        console.log('[Pixiv2Eagle] 系列文件夹', folder.id, '中 items 数量:', folderItems ? folderItems.length : 0);
+                                        log('系列文件夹', folder.id, '中 items 数量:', folderItems ? folderItems.length : 0);
                                         for (const it of folderItems || []) if (it && it.url) urlSet.add(it.url);
                                     } catch (e) {
                                         console.error('拉取系列文件夹 items 失败:', folder.id, e);
@@ -2794,12 +2784,10 @@ SOFTWARE.
                                     }
                                 }
                                 await collectSeriesFolderItems(seriesFolder);
-                                console.log('[Pixiv2Eagle] 系列页面递归收集完成，urlSet 大小:', urlSet.size, '，folderDescSet 大小:', folderDescSet.size);
-                                log('系列页面递归收集完成，现有 urlSet 大小:', urlSet.size, '，folderDescSet 大小:', folderDescSet.size);
+                                log('系列页面递归收集完成，urlSet 大小:', urlSet.size, '，folderDescSet 大小:', folderDescSet.size);
                             } else {
-                                console.log('[Pixiv2Eagle] 系列页面但未在 Eagle 中找到对应系列文件夹（seriesId:', seriesId, '）');
-                                console.log('[Pixiv2Eagle] 画师文件夹子目录列表:', updatedArtistFolder.children.map(c => `${c.name} (${c.description})`).join(', '));
-                                log('系列页面但未在 Eagle 中找到对应系列文件夹');
+                                log('系列页面但未在 Eagle 中找到对应系列文件夹（seriesId:', seriesId, '）');
+                                log('画师文件夹子目录列表:', updatedArtistFolder.children.map(c => `${c.name} (${c.description})`).join(', '));
                             }
                         }
                     }
@@ -2860,7 +2848,7 @@ SOFTWARE.
             };
 
             // 首次批量标注
-            console.log('[Pixiv2Eagle] 开始首次批量标注，artworkIds:', artworkIds.length, '个');
+            log('开始首次批量标注，artworkIds:', artworkIds.length, '个');
             for (const id of artworkIds) {
                 const target = anchorMap[id];
                 // 标记为已检查，防止重复处理（无论是否匹配）
@@ -2869,10 +2857,10 @@ SOFTWARE.
 
                 const artworkUrl = `https://www.pixiv.net/artworks/${id}`;
                 if (urlSet.has(artworkUrl)) {
-                    console.log('[Pixiv2Eagle] 作品', id, '匹配 (itemUrl)');
+                    log('作品', id, '匹配 (itemUrl)');
                     insertBadgeToContainer(target, { artworkId: id, artworkUrl, matchedBy: 'itemUrl' });
                 } else if (folderDescSet.has(String(id))) {
-                    console.log('[Pixiv2Eagle] 作品', id, '匹配 (folderDesc)');
+                    log('作品', id, '匹配 (folderDesc)');
                     insertBadgeToContainer(target, { artworkId: id, artworkUrl, matchedBy: 'folderDesc' });
                 } else {
                     if (debug) log('未匹配作品:', id);
@@ -3203,7 +3191,9 @@ SOFTWARE.
                 
                 // 情况 1: 画师不在 Eagle 中 -> 肯定未保存 -> 标记为已检查
                 if (!artistData) {
-                    console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 不在 Eagle 中 -> 未保存`);
+                    if (getDebugMode()) {
+                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 不在 Eagle 中 -> 未保存`);
+                    }
                     li.dataset.eagleChecked = "1";
                     pendingLis.delete(li);
                     return;
@@ -3215,15 +3205,21 @@ SOFTWARE.
                     if (success) {
                         li.dataset.eagleChecked = "1"; // 标记成功才设为 checked
                         pendingLis.delete(li);
-                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记成功`);
+                        if (getDebugMode()) {
+                            console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记成功`);
+                        }
                     } else {
                         // 标记失败（如找不到容器），加入重试队列
-                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记失败 (找不到容器)，加入重试`);
+                        if (getDebugMode()) {
+                            console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记失败 (找不到容器)，加入重试`);
+                        }
                         pendingLis.add(li);
                     }
                 } else {
                     // 情况 3: 作品未保存 -> 标记为已检查
-                    console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 在 Eagle 中，但作品未保存`);
+                    if (getDebugMode()) {
+                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 在 Eagle 中，但作品未保存`);
+                    }
                     li.dataset.eagleChecked = "1";
                     pendingLis.delete(li);
                 }
@@ -3318,7 +3314,9 @@ SOFTWARE.
                     }
                 }
                 if (shouldScan) {
-                    console.log("[Pixiv2Eagle] 推荐区域检测到新内容，触发扫描...");
+                    if (getDebugMode()) {
+                        console.log("[Pixiv2Eagle] 推荐区域检测到新内容，触发扫描...");
+                    }
                     scan();
                 }
             });
@@ -3803,32 +3801,6 @@ p {
             //         reject(new Error("EPUB 生成超时（120秒）"));
             //     }, 120000);
             // });
-            
-            // 不设置全局压缩，让每个文件的 compression: "STORE" 生效
-            // 尝试不使用 streamFiles，因为可能导致卡住
-            const generateStartTime = Date.now();
-            
-            // 检查所有文件的数据是否已准备好
-            let allFilesReady = true;
-            const fileCheckResults = [];
-            for (const fileName in zip.files) {
-                const file = zip.files[fileName];
-                if (!file.dir) {
-                    const hasData = file._data !== undefined && file._data !== null;
-                    fileCheckResults.push({
-                        name: fileName,
-                        hasData: hasData,
-                        dataType: file._data ? typeof file._data : 'undefined'
-                    });
-                    if (!hasData) {
-                        allFilesReady = false;
-                    }
-                }
-            }
-            
-            if (!allFilesReady) {
-                throw new Error("某些文件数据未准备好");
-            }
             
             // 使用 onUpdate 回调来监控进度
             let lastUpdateTime = Date.now();
@@ -4538,27 +4510,18 @@ p {
             const refButton = document.querySelector(ARTWORK_BUTTON_REF_SELECTOR);
             
             if (!container) {
-                console.log('[Pixiv2Eagle] 未找到按钮容器:', ARTWORK_BUTTON_CONTAINER_SELECTOR);
-                console.log('[Pixiv2Eagle] 尝试查找所有可能的容器...');
-                const allDivs = document.querySelectorAll('div[class*="sc-7fd477ff"]');
-                console.log('[Pixiv2Eagle] 找到的相关容器:', allDivs.length);
-                allDivs.forEach((div, idx) => {
-                    console.log(`[Pixiv2Eagle] 容器 ${idx}:`, div.className);
-                });
+                if (getDebugMode()) {
+                    console.log('[Pixiv2Eagle] 未找到按钮容器:', ARTWORK_BUTTON_CONTAINER_SELECTOR);
+                }
                 return;
             }
 
-            if (!refButton) {
+            if (!refButton && getDebugMode()) {
                 console.log('[Pixiv2Eagle] 未找到参考按钮:', ARTWORK_BUTTON_REF_SELECTOR);
-                console.log('[Pixiv2Eagle] 容器内所有子元素:');
-                Array.from(container.children).forEach((child, idx) => {
-                    console.log(`[Pixiv2Eagle] 子元素 ${idx}:`, child.className, child.tagName);
-                });
             }
 
             // 4. 避免重复添加
             if (document.getElementById('eagle-move-to-subfolder-btn')) {
-                console.log('[Pixiv2Eagle] 按钮已存在');
                 return;
             }
 
@@ -4581,7 +4544,9 @@ p {
                 // 如果没有参考按钮，直接添加到容器末尾
                 container.appendChild(btn);
             }
-            console.log('[Pixiv2Eagle] ✅ 成功添加"移动到子文件夹"按钮');
+            if (getDebugMode()) {
+                console.log('[Pixiv2Eagle] ✅ 成功添加"移动到子文件夹"按钮');
+            }
 
         } catch (error) {
             console.error('[Pixiv2Eagle] ❌ 添加"移动到子文件夹"按钮失败:', error);
@@ -4681,14 +4646,18 @@ p {
 
     // 启动脚本
     try {
-        console.log('[Pixiv2Eagle] 脚本已启动，当前URL:', location.pathname);
+        if (getDebugMode()) {
+            console.log('[Pixiv2Eagle] 脚本已启动，当前URL:', location.pathname);
+        }
         
         // 立即开始构建全局索引
         ensureEagleIndex();
 
         for (const monitorInfo of monitorConfig) {
             if (location.pathname.includes(monitorInfo.urlSuffix)) {
-                console.log('[Pixiv2Eagle] 初始加载时触发处理器:', monitorInfo.urlSuffix);
+                if (getDebugMode()) {
+                    console.log('[Pixiv2Eagle] 初始加载时触发处理器:', monitorInfo.urlSuffix);
+                }
                 handlePageChange(monitorInfo);
             }
         }
