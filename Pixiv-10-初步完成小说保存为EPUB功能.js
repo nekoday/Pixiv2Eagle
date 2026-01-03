@@ -1,9 +1,9 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name            Pixiv2Eagle
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.2.3.12
+// @version         2.2.3
 
 // @author          nekoday,juzijun233
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -81,11 +81,11 @@ SOFTWARE.
     const NOVEL_SERIES_DESC_SELECTOR = 'div.sc-fcc502d1-0.jNYFaO > p.sc-fcc502d1-1.fDflWh'; // 小说系列简介
     const NOVEL_COVER_SELECTOR = 'img.sc-41178ccf-19.cKuUeg'; // 小说封面图片
     const NOVEL_SERIES_COVER_SELECTOR = 'img.sc-11435b73-2.hnPyQB'; // 小说系列封面图片
-    const NOVEL_AUTHOR_CONTAINER_SELECTOR = 'a.sc-bypJrT.bUiITy'; // 小说作者信息容器（a标签，包含作者UID和作者名）
+    const NOVEL_AUTHOR_SELECTOR = 'h2.sc-b6a5d604-0.kepWbf a[data-gtm-value]'; // 小说作者链接 (含 ID)
+    const NOVEL_SERIES_AUTHOR_SELECTOR = 'h2.sc-b6a5d604-0.kepWbf a[data-gtm-user-id]'; // 小说系列作者链接 (含 ID)
     const NOVEL_CONTENT_SELECTOR = 'div.sc-ejfMa-d.fldORf'; // 小说正文内容容器
     const NOVEL_SERIES_SECTION_SELECTOR = 'section.sc-55920ee2-1'; // 小说所属系列区域 (用于判断是否属于系列)
     const NOVEL_SERIES_LINK_SELECTOR = 'a.sc-13d2e2cd-0.gwOqfd[href^="/novel/series/"]'; // 小说系列链接
-    const NOVEL_SERIES_TITLE_SELECTOR = 'h2.sc-edf844cc-2.emSEGV'; // 小说系列标题
     const NOVEL_SAVE_BUTTON_SECTION_SELECTOR = 'section.sc-44936c9d-0.bmSdAW'; // 小说保存按钮插入位置
     const NOVEL_CHAPTER_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列章节列表容器
     const NOVEL_SERIES_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列列表容器 (别名，与 NOVEL_CHAPTER_LIST_SELECTOR 相同)
@@ -93,9 +93,7 @@ SOFTWARE.
     const NOVEL_CHAPTER_ITEM_CONTAINER_SELECTOR = 'div.sc-3a91e6c3-6.eJoreT'; // 小说章节列表项容器 (用于插入标记)
     const NOVEL_CHAPTER_BADGE_CONTAINER_SELECTOR = 'div.sc-3a91e6c3-6.eJoreT'; // 小说章节标记容器 (与 NOVEL_CHAPTER_ITEM_CONTAINER_SELECTOR 相同)
     const NOVEL_CHAPTER_REF_BUTTON_SELECTOR = 'button.sc-5d3311e8-0.iGxyRb'; // 小说章节列表参考按钮 (标记插在此之前)
-    const NOVEL_TAGS_CONTAINER_SELECTOR = 'footer.sc-41178ccf-4.RaSaf'; // 小说标签容器
-    const NOVEL_TAG_ITEM_SELECTOR = 'ul.sc-bb0ca45a-0.feaSLI li'; // 小说标签项（位于 footer 内的 ul 列表中）
-    const NOVEL_PUBLISH_DATE_CONTAINER_SELECTOR = 'div.sc-a5165759-0.lbROcw'; // 小说出版日期容器
+    const NOVEL_SERIES_AUTHOR_LINK_SELECTOR = 'h2.sc-b6a5d604-0.kepWbf a[data-gtm-user-id]'; // 小说系列作者链接 (与 NOVEL_SERIES_AUTHOR_SELECTOR 相同)
 
     // DOM Selectors - Misc
     const SERIES_NAV_BUTTON_SELECTOR = 'div.sc-487e14c9-0.doUXUo'; // 漫画系列"加入追更"按钮 (用于判断是否为漫画系列)
@@ -556,6 +554,9 @@ SOFTWARE.
 
     // 检查 Eagle 是否运行
     async function checkEagle() {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:402',message:'checkEagle entry',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         try {
             // 添加超时处理（5秒）
             const timeoutPromise = new Promise((_, reject) => {
@@ -567,11 +568,17 @@ SOFTWARE.
                 timeoutPromise
             ]);
             
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:405',message:'Eagle API call success',data:{status:data?.status,hasVersion:!!data?.data?.version,version:data?.data?.version},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             return {
                 running: true,
                 version: data.data.version,
             };
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:410',message:'Eagle API call failed',data:{errorName:error?.name,errorMessage:error?.message,errorStack:error?.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error("Eagle 未启动或无法连接:", error);
             return {
                 running: false,
@@ -582,6 +589,9 @@ SOFTWARE.
 
     // 查询 Eagle 中是否已保存指定作品
     async function isArtworkSavedInEagle(artworkId, folderId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:419',message:'isArtworkSavedInEagle entry',data:{artworkId,folderId,hasFolderId:!!folderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         if (!folderId) {
             return { saved: false, itemId: null };
         }
@@ -600,7 +610,13 @@ SOFTWARE.
                     offset: offset.toString(),
                 });
 
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:438',message:'Before item/list API call',data:{offset,loopCount,limit},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 const data = await gmFetch(`http://localhost:41595/api/item/list?${params.toString()}`);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:439',message:'After item/list API call',data:{status:data?.status,hasData:!!data?.data,isArray:Array.isArray(data?.data),itemsCount:Array.isArray(data?.data)?data.data.length:(data?.data?.items?.length||0)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 if (!data || !data.status) break;
 
                 const items = Array.isArray(data.data)
@@ -615,6 +631,9 @@ SOFTWARE.
                 // 2. 深度检查：如果列表没找到，遍历调用 /api/item/info 获取详细信息对比
                 // (优化：解决列表接口可能返回不完整或缓存数据的问题)
                 if (!matched && items.length > 0) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:452',message:'Starting deep check',data:{itemsCount:items.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     const concurrency = 5; // 并发数限制
                     for (let i = 0; i < items.length; i += concurrency) {
                         const chunk = items.slice(i, i + concurrency);
@@ -636,6 +655,9 @@ SOFTWARE.
                 }
 
                 if (matched) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:473',message:'Artwork found in Eagle',data:{itemId:matched.id,loopCount,offset},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     return {
                         saved: true,
                         itemId: matched.id,
@@ -647,9 +669,15 @@ SOFTWARE.
                 loopCount += 1;
             }
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:485',message:'isArtworkSavedInEagle error',data:{errorName:error?.name,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error("检测作品保存状态失败:", error);
         }
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:488',message:'Artwork not found in Eagle',data:{artworkId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         return { saved: false, itemId: null };
     }
 
@@ -1435,8 +1463,14 @@ SOFTWARE.
     // 动态加载 JSZip 库到用户脚本沙箱
     async function ensureJSZipLoaded() {
         if (window.JSZip) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1329',message:'JSZip already loaded',data:{hasJSZip:!!window.JSZip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             return;
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1332',message:'Loading JSZip from CDN',data:{useDomestic:USE_DOMESTIC_CDN},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         // 使用 3.1.5 版本，因为 3.2.x+ 版本存在性能问题
         const jsZipUrl = USE_DOMESTIC_CDN 
             ? "https://cdn.jsdmirror.com/npm/jszip@3.1.5/dist/jszip.min.js"
@@ -1444,20 +1478,35 @@ SOFTWARE.
         let code;
         try {
             code = await gmFetchText(jsZipUrl);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1334',message:'JSZip code loaded',data:{codeLength:code?.length||0,hasCode:!!code},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             if (!code || code.length === 0) {
                 throw new Error(`JSZip 代码加载失败：代码为空 (URL: ${jsZipUrl})`);
             }
         } catch (fetchError) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1478',message:'JSZip fetch error',data:{errorName:fetchError?.name,errorMessage:fetchError?.message,url:jsZipUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             throw new Error(`JSZip 代码加载失败：${fetchError?.message || '未知错误'} (URL: ${jsZipUrl})`);
         }
         
         try {
             eval(code);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1336',message:'After eval JSZip code',data:{hasJSZip:!!window.JSZip,jsZipType:typeof window.JSZip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
         } catch (evalError) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1485',message:'JSZip eval error',data:{errorName:evalError?.name,errorMessage:evalError?.message,errorStack:evalError?.stack?.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             throw new Error(`JSZip 代码执行失败：${evalError?.message || '未知错误'}`);
         }
         
         if (!window.JSZip) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1490',message:'JSZip not available after eval',data:{hasJSZip:!!window.JSZip,windowKeys:Object.keys(window).filter(k => k.toLowerCase().includes('zip')).slice(0,10)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             throw new Error("JSZip 加载失败：eval 后 window.JSZip 不存在");
         }
     }
@@ -1620,7 +1669,13 @@ SOFTWARE.
 
     // 获取小说保存格式
     function getNovelSaveFormat() {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1475',message:'getNovelSaveFormat entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         const format = GM_getValue("novelSaveFormat", "txt"); // 默认 txt
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1476',message:'getNovelSaveFormat return',data:{format},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         return format;
     }
 
@@ -1733,6 +1788,9 @@ SOFTWARE.
 
     // 保存图片到 Eagle
     async function saveToEagle(imageUrls, folderId, details, artworkId) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1360',message:'saveToEagle entry',data:{artworkId,folderId,imageUrlCount:imageUrls?.length,illustType:details?.illustType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         async function getUgoiraUrl(artworkId) {
             const gifBlob = await convertUgoiraToGifBlob(artworkId);
             const [base64, dataURL] = await (async () => {
@@ -1761,6 +1819,9 @@ SOFTWARE.
         const shouldSaveDescription = getSaveDescription();
         const annotation = shouldSaveDescription ? details.description : undefined;
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1390',message:'Before Eagle API call',data:{folderId,itemCount:imageUrls.length,isUgoira,isMultiPage},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         // 批量添加图片
         const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
             method: "POST",
@@ -1785,7 +1846,13 @@ SOFTWARE.
             }),
         });
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1413',message:'After Eagle API call',data:{status:data?.status,hasData:!!data?.data,dataLength:data?.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         if (!data.status) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:1414',message:'Save failed - status false',data:{status:data?.status,data:JSON.stringify(data).substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             throw new Error("保存图片失败");
         }
 
@@ -2584,14 +2651,14 @@ SOFTWARE.
             if (
                 !location.pathname.includes('/illustrations') &&
                 !location.pathname.includes('/manga') &&
-                !location.pathname.includes('/series/') &&
-                !location.pathname.includes('/artworks')
+                !location.pathname.includes('/series/')
             ) {
-                log('当前页面非 artist illustrations/manga/series/artworks 页面，跳过');
+                log('当前页面非 artist illustrations/manga/series 页面，跳过');
+                console.log('[Pixiv2Eagle] 当前页面不匹配条件，跳过');
                 return;
             }
 
-            log('当前页面匹配条件，开始处理');
+            console.log('[Pixiv2Eagle] 当前页面匹配条件，开始处理');
 
             // 确定搜索范围与列表容器
             let listContainer = null;
@@ -2599,7 +2666,7 @@ SOFTWARE.
             // 1. 系列页面
             if (location.pathname.includes('/series/')) {
                 const selector = SERIES_PAGE_LIST_SELECTOR;
-                log('系列页面：尝试定位列表容器', selector);
+                console.log('[Pixiv2Eagle] 系列页面：尝试定位列表容器', selector);
                 // 尝试等待容器出现（最多 5 秒，避免过久阻塞）
                 listContainer = await new Promise(resolve => {
                     const el = document.querySelector(selector);
@@ -2622,7 +2689,7 @@ SOFTWARE.
             else {
                 // 用户提供的选择器: div.sc-bf8cea3f-0.dKbaFf
                 const selector = LIST_CONTAINER_SELECTOR;
-                log('插画/漫画页面：尝试定位列表容器', selector);
+                console.log('[Pixiv2Eagle] 插画/漫画页面：尝试定位列表容器', selector);
                 listContainer = await waitForElement(selector, 5000);
             }
 
@@ -2630,7 +2697,7 @@ SOFTWARE.
 
             if (listContainer) {
                 const lis = listContainer.querySelectorAll('li');
-                log(`在列表容器中找到 ${lis.length} 个作品项`);
+                console.log(`[Pixiv2Eagle] 在列表容器中找到 ${lis.length} 个作品项`);
                 
                 for (const li of lis) {
                     // 查找作品链接提取 PID
@@ -2664,18 +2731,21 @@ SOFTWARE.
                     }
                 }
             } else {
-                log('未找到列表容器，跳过检测');
+                console.log('[Pixiv2Eagle] 未找到列表容器，跳过检测');
                 return;
             }
 
             const artworkIds = Object.keys(anchorMap);
             if (artworkIds.length === 0) {
                 log('未解析到任何 artwork id');
+                console.log('[Pixiv2Eagle] 未解析到任何 artwork id');
                 return;
             }
 
-            log('检测到', artworkIds.length, '个作品链接/目标容器');
-            log('解析到 artworkIds:', artworkIds.slice(0, 5).join(','), artworkIds.length > 5 ? '...' : '');
+            console.log('[Pixiv2Eagle] 检测到', artworkIds.length, '个作品链接/目标容器');
+
+            // 移除旧的评分逻辑，直接使用 anchorMap
+            console.log('[Pixiv2Eagle] 解析到 artworkIds:', artworkIds.slice(0, 5).join(','), artworkIds.length > 5 ? '...' : '');
 
             // 获取画师 ID - 支持 /user/{id} 和 /users/{id} 两种格式
             let artistMatch = location.pathname.match(/^\/users\/(\d+)/);
@@ -2684,20 +2754,23 @@ SOFTWARE.
             }
             const artistId = artistMatch ? artistMatch[1] : null;
             if (!artistId) {
-                log('无法从 URL 解析 artistId，URL:', location.pathname);
+                log('无法从 URL 解析 artistId');
+                console.log('[Pixiv2Eagle] 无法从 URL 解析 artistId，URL:', location.pathname);
                 return;
             }
 
-            log('解析到 artistId:', artistId);
+            console.log('[Pixiv2Eagle] 解析到 artistId:', artistId);
 
             const pixivFolderId = getFolderId();
             const artistFolder = await findArtistFolder(pixivFolderId, artistId);
             if (!artistFolder) {
-                log('未找到对应的画师文件夹，跳过标注（pixivFolderId:', pixivFolderId, '）');
+                log('未找到对应的画师文件夹，跳过标注');
+                console.log('[Pixiv2Eagle] 未找到对应的画师文件夹（pixivFolderId:', pixivFolderId, '）');
                 return;
             }
 
-            log('找到画师文件夹', artistFolder.id, '名称:', artistFolder.name, '开始拉取 items');
+            log('找到画师文件夹', artistFolder.id, '开始拉取 items');
+            console.log('[Pixiv2Eagle] 找到画师文件夹:', artistFolder.id, '名称:', artistFolder.name);
             const items = await getAllEagleItemsInFolder(artistFolder.id);
             
             // 如果开启了按类型保存，还需要拉取类型文件夹中的 items
@@ -2712,7 +2785,7 @@ SOFTWARE.
             }
 
             const urlSet = new Set((items || []).map((it) => it.url));
-            log('画师文件夹(含类型子文件夹)中 items 数量:', items ? items.length : 0);
+            console.log('[Pixiv2Eagle] 画师文件夹(含类型子文件夹)中 items 数量:', items ? items.length : 0);
 
             // 依据规则：
             // - 画师文件夹的 description 中含有 `pid = {artistId}` 用于识别画师（见 findArtistFolder）
@@ -2732,24 +2805,26 @@ SOFTWARE.
                 }
             })(artistFolder);
             log('已收集到的子文件夹描述数量:', folderDescSet.size);
+            console.log('[Pixiv2Eagle] 已收集到的子文件夹描述数量:', folderDescSet.size);
 
             // 如果是系列页面，优先查找系列文件夹并在该文件夹下递归寻找 item/url 与子文件夹描述（备注为 pid）
             if (location.pathname.includes('/series/')) {
                 // 尝试添加更新按钮
                 addUpdateSeriesButton();
 
-                log('检测到系列页面，开始处理系列文件夹');
+                console.log('[Pixiv2Eagle] 检测到系列页面，开始处理系列文件夹');
                 try {
                     const seriesMatch = location.pathname.match(/\/series\/(\d+)/);
                     const seriesId = seriesMatch ? seriesMatch[1] : null;
-                    log('系列ID:', seriesId);
+                    console.log('[Pixiv2Eagle] 系列ID:', seriesId);
                     if (seriesId) {
                         // 重新获取画师文件夹的最新数据（包含完整的子文件夹树）
                         const updatedArtistFolder = await findArtistFolder(pixivFolderId, artistId);
                         if (!updatedArtistFolder) {
                             log('系列页面但无法重新获取画师文件夹');
+                            console.log('[Pixiv2Eagle] 系列页面但无法重新获取画师文件夹');
                         } else {
-                            log('已重新获取画师文件夹，查找系列文件夹');
+                            console.log('[Pixiv2Eagle] 已重新获取画师文件夹，查找系列文件夹');
                             // 1. 在画师根目录下找系列
                             let seriesFolder = findSeriesFolderInArtist(updatedArtistFolder, artistId, seriesId);
                             
@@ -2763,13 +2838,14 @@ SOFTWARE.
                             }
 
                             if (seriesFolder) {
-                                log('找到系列文件夹:', seriesFolder.id, '，名称:', seriesFolder.name, '，将递归检查其 items 与子文件夹描述');
+                                console.log('[Pixiv2Eagle] 找到系列文件夹:', seriesFolder.id, '，名称:', seriesFolder.name);
+                                log('在系列页面找到对应的 Eagle 系列文件夹', seriesFolder.id, '，将递归检查其 items 与子文件夹描述');
                                 // 递归获取系列文件夹下所有层级的 items
                                 async function collectSeriesFolderItems(folder) {
                                     if (!folder || !folder.id) return;
                                     try {
                                         const folderItems = await getAllEagleItemsInFolder(folder.id);
-                                        log('系列文件夹', folder.id, '中 items 数量:', folderItems ? folderItems.length : 0);
+                                        console.log('[Pixiv2Eagle] 系列文件夹', folder.id, '中 items 数量:', folderItems ? folderItems.length : 0);
                                         for (const it of folderItems || []) if (it && it.url) urlSet.add(it.url);
                                     } catch (e) {
                                         console.error('拉取系列文件夹 items 失败:', folder.id, e);
@@ -2787,10 +2863,12 @@ SOFTWARE.
                                     }
                                 }
                                 await collectSeriesFolderItems(seriesFolder);
-                                log('系列页面递归收集完成，urlSet 大小:', urlSet.size, '，folderDescSet 大小:', folderDescSet.size);
+                                console.log('[Pixiv2Eagle] 系列页面递归收集完成，urlSet 大小:', urlSet.size, '，folderDescSet 大小:', folderDescSet.size);
+                                log('系列页面递归收集完成，现有 urlSet 大小:', urlSet.size, '，folderDescSet 大小:', folderDescSet.size);
                             } else {
-                                log('系列页面但未在 Eagle 中找到对应系列文件夹（seriesId:', seriesId, '）');
-                                log('画师文件夹子目录列表:', updatedArtistFolder.children.map(c => `${c.name} (${c.description})`).join(', '));
+                                console.log('[Pixiv2Eagle] 系列页面但未在 Eagle 中找到对应系列文件夹（seriesId:', seriesId, '）');
+                                console.log('[Pixiv2Eagle] 画师文件夹子目录列表:', updatedArtistFolder.children.map(c => `${c.name} (${c.description})`).join(', '));
+                                log('系列页面但未在 Eagle 中找到对应系列文件夹');
                             }
                         }
                     }
@@ -2851,7 +2929,7 @@ SOFTWARE.
             };
 
             // 首次批量标注
-            log('开始首次批量标注，artworkIds:', artworkIds.length, '个');
+            console.log('[Pixiv2Eagle] 开始首次批量标注，artworkIds:', artworkIds.length, '个');
             for (const id of artworkIds) {
                 const target = anchorMap[id];
                 // 标记为已检查，防止重复处理（无论是否匹配）
@@ -2860,10 +2938,10 @@ SOFTWARE.
 
                 const artworkUrl = `https://www.pixiv.net/artworks/${id}`;
                 if (urlSet.has(artworkUrl)) {
-                    log('作品', id, '匹配 (itemUrl)');
+                    console.log('[Pixiv2Eagle] 作品', id, '匹配 (itemUrl)');
                     insertBadgeToContainer(target, { artworkId: id, artworkUrl, matchedBy: 'itemUrl' });
                 } else if (folderDescSet.has(String(id))) {
-                    log('作品', id, '匹配 (folderDesc)');
+                    console.log('[Pixiv2Eagle] 作品', id, '匹配 (folderDesc)');
                     insertBadgeToContainer(target, { artworkId: id, artworkUrl, matchedBy: 'folderDesc' });
                 } else {
                     if (debug) log('未匹配作品:', id);
@@ -2984,6 +3062,9 @@ SOFTWARE.
 
     // 异步构建 Eagle 索引 (单例模式)
     async function ensureEagleIndex(forceRefresh = false) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2578',message:'ensureEagleIndex entry',data:{hasGlobalIndex:!!window.__pixiv2eagle_globalEagleIndex,hasLoadingPromise:!!window.__pixiv2eagle_eagleIndexLoadingPromise,forceRefresh},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         
         // 如果强制刷新，清除缓存
         if (forceRefresh) {
@@ -3027,10 +3108,19 @@ SOFTWARE.
         console.log("[Pixiv2Eagle] 正在构建全局 Eagle 索引...");
         window.__pixiv2eagle_eagleIndexLoadingPromise = (async () => {
             const index = new Map();
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2586',message:'Index building started',data:{hasPixivFolderId:!!pixivFolderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             if (!pixivFolderId) return index;
 
             try {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2589',message:'Before folder/list API call',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
                 const folderList = await gmFetch("http://localhost:41595/api/folder/list");
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2590',message:'After folder/list API call',data:{status:folderList?.status,isArray:Array.isArray(folderList?.data),dataLength:folderList?.data?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
                 if (folderList.status && Array.isArray(folderList.data)) {
                     const findFolder = (folders, id) => {
                         for (const f of folders) {
@@ -3043,6 +3133,9 @@ SOFTWARE.
                         return null;
                     };
                     const root = findFolder(folderList.data, pixivFolderId);
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2601',message:'Root folder found',data:{hasRoot:!!root,hasChildren:!!root?.children,childrenCount:root?.children?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     
                     if (root && root.children) {
                         for (const artistFolder of root.children) {
@@ -3074,6 +3167,9 @@ SOFTWARE.
                             }
                         }
                     }
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2633',message:'Index building completed',data:{indexSize:index.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     console.log(`[Pixiv2Eagle] 全局 Eagle 索引构建完成，包含 ${index.size} 位画师`);
                     
                     // 持久化索引到存储
@@ -3091,6 +3187,9 @@ SOFTWARE.
                     }
                 }
             } catch (e) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2635',message:'Index building error',data:{errorName:e?.name,errorMessage:e?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                // #endregion
                 console.error("[Pixiv2Eagle] 构建 Eagle 索引失败:", e);
             }
             return index;
@@ -3098,7 +3197,13 @@ SOFTWARE.
 
         try {
             window.__pixiv2eagle_globalEagleIndex = await window.__pixiv2eagle_eagleIndexLoadingPromise;
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2642',message:'Index loaded successfully',data:{indexSize:window.__pixiv2eagle_globalEagleIndex?.size},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
         } catch (e) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2643',message:'Index loading error',data:{errorName:e?.name,errorMessage:e?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             console.error(e);
             window.__pixiv2eagle_eagleIndexLoadingPromise = null; // 允许重试
         }
@@ -3185,6 +3290,9 @@ SOFTWARE.
 
                 // 确保索引已就绪
                 if (!window.__pixiv2eagle_globalEagleIndex) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2729',message:'Index not ready',data:{pid,uid},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     pendingLis.add(li); // 索引未就绪，加入重试队列
                     return;
                 }
@@ -3194,9 +3302,10 @@ SOFTWARE.
                 
                 // 情况 1: 画师不在 Eagle 中 -> 肯定未保存 -> 标记为已检查
                 if (!artistData) {
-                    if (getDebugMode()) {
-                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 不在 Eagle 中 -> 未保存`);
-                    }
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2738',message:'Artist not in Eagle',data:{pid,uid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
+                    console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 不在 Eagle 中 -> 未保存`);
                     li.dataset.eagleChecked = "1";
                     pendingLis.delete(li);
                     return;
@@ -3204,25 +3313,28 @@ SOFTWARE.
 
                 // 情况 2: 画师在 Eagle 中，检查作品 PID
                 if (artistData.pids.has(pid)) {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2746',message:'Artwork found in index',data:{pid,uid,indexSize:window.__pixiv2eagle_globalEagleIndex.size},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
                     const success = addBadge(li, pid);
                     if (success) {
                         li.dataset.eagleChecked = "1"; // 标记成功才设为 checked
                         pendingLis.delete(li);
-                        if (getDebugMode()) {
-                            console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记成功`);
-                        }
+                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记成功`);
                     } else {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2754',message:'Badge add failed',data:{pid,uid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                        // #endregion
                         // 标记失败（如找不到容器），加入重试队列
-                        if (getDebugMode()) {
-                            console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记失败 (找不到容器)，加入重试`);
-                        }
+                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 已保存 (画师 ${uid}) -> 标记失败 (找不到容器)，加入重试`);
                         pendingLis.add(li);
                     }
                 } else {
                     // 情况 3: 作品未保存 -> 标记为已检查
-                    if (getDebugMode()) {
-                        console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 在 Eagle 中，但作品未保存`);
-                    }
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2758',message:'Artwork not in index',data:{pid,uid,hasPids:!!artistData.pids,pidsSize:artistData.pids?.size},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                    // #endregion
+                    console.log(`[Pixiv2Eagle] 作品 ${pid}: 画师 ${uid} 在 Eagle 中，但作品未保存`);
                     li.dataset.eagleChecked = "1";
                     pendingLis.delete(li);
                 }
@@ -3230,6 +3342,9 @@ SOFTWARE.
 
             // 3. 添加标记函数
             const addBadge = (li, pid) => {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2766',message:'addBadge entry',data:{pid,hasLi:!!li},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 // 寻找缩略图容器
                 let target = li.querySelector(REC_THUMBNAIL_SELECTOR);
                 if (!target) target = li.querySelector('div.sc-f44a0b30-9');
@@ -3244,6 +3359,9 @@ SOFTWARE.
                     if (img) target = img.parentElement;
                 }
 
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2781',message:'Target container check',data:{hasTarget:!!target,targetTag:target?.tagName,targetClass:target?.className?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 if (!target) return false;
 
                 if (target.querySelector('.eagle-saved-badge')) return true;
@@ -3269,6 +3387,9 @@ SOFTWARE.
                     target.style.position = 'relative';
                 }
                 target.appendChild(badge);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:2806',message:'Badge added successfully',data:{pid},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+                // #endregion
                 return true;
             };
 
@@ -3317,9 +3438,7 @@ SOFTWARE.
                     }
                 }
                 if (shouldScan) {
-                    if (getDebugMode()) {
-                        console.log("[Pixiv2Eagle] 推荐区域检测到新内容，触发扫描...");
-                    }
+                    console.log("[Pixiv2Eagle] 推荐区域检测到新内容，触发扫描...");
                     scan();
                 }
             });
@@ -3487,6 +3606,9 @@ SOFTWARE.
 
     // 生成 EPUB 电子书
     async function generateEPUB(details, combinedContent, progressWindow = null) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3412',message:'generateEPUB entry',data:{hasDetails:!!details,hasCombinedContent:!!combinedContent,format:combinedContent?.format},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         
         // 检查是否已取消
         if (progressWindow && progressWindow.isCancelled()) {
@@ -3498,13 +3620,22 @@ SOFTWARE.
         }
         
         // 确保 JSZip 已加载
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3415',message:'Before ensureJSZipLoaded',data:{hasJSZip:!!window.JSZip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         await ensureJSZipLoaded();
         
         if (progressWindow) {
             progressWindow.updateProgress(10, '正在创建 EPUB 结构...');
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3417',message:'After ensureJSZipLoaded',data:{hasJSZip:!!window.JSZip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         
         const zip = new window.JSZip();
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3420',message:'JSZip instance created',data:{hasZip:!!zip},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         const safeTitle = details.title.replace(/[\\/:*?"<>|]/g, "_");
         
         // 1. 添加 mimetype 文件（必须是第一个，且不压缩）
@@ -3596,76 +3727,7 @@ SOFTWARE.
             progressWindow.updateProgress(50, '正在生成 HTML 内容...');
         }
         
-        // 6. 生成封面页 HTML
-        let coverHtml = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head>
-    <meta charset="UTF-8"/>
-    <title>封面</title>
-    <link rel="stylesheet" type="text/css" href="style.css"/>
-</head>
-<body>
-    <div class="cover-page">
-        ${coverImagePath ? `<img src="${coverImagePath}" alt="${escapeXml(details.title)}" class="cover-image"/>` : `<h1 class="cover-title">${escapeXml(details.title)}</h1>`}
-    </div>
-</body>
-</html>`;
-        oebps.file("cover.html", coverHtml, { compression: "STORE" });
-        
-        // 7. 生成作者信息页 HTML
-        const authorUrl = details.authorId ? `https://www.pixiv.net/users/${details.authorId}` : '';
-        let authorHtml = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head>
-    <meta charset="UTF-8"/>
-    <title>作者信息</title>
-    <link rel="stylesheet" type="text/css" href="style.css"/>
-</head>
-<body>
-    <div class="author-page">
-        <h1>${escapeXml(details.title)}</h1>
-        <div class="author-info">
-            <h2>作者信息</h2>
-            <p class="author-name"><strong>作者：</strong>${escapeXml(details.authorName || "Unknown")}</p>
-            ${authorUrl ? `<p class="author-url"><strong>Pixiv：</strong><a href="${escapeXml(authorUrl)}">${escapeXml(authorUrl)}</a></p>` : ''}
-        </div>`;
-        
-        if (details.description) {
-            authorHtml += `
-        <div class="novel-description">
-            <h2>小说简介</h2>
-            <p>${escapeXml(details.description).replace(/\n/g, '</p><p>')}</p>
-        </div>`;
-        }
-        
-        if (details.tags && details.tags.length > 0) {
-            authorHtml += `
-        <div class="novel-tags">
-            <h2>小说标签</h2>
-            <p>${details.tags.map(tag => escapeXml(tag)).join('、')}</p>
-        </div>`;
-        }
-        
-        if (details.seriesTitle && details.seriesId) {
-            const seriesUrl = `https://www.pixiv.net/novel/series/${details.seriesId}`;
-            // 直接使用details.seriesTitle（原始系列标题），与保存到eagle时的提取方法相同，但不添加"系列:"前缀
-            authorHtml += `
-        <div class="novel-series">
-            <h2>系列信息</h2>
-            <p class="series-name"><strong>系列名：</strong>${escapeXml(details.seriesTitle)}</p>
-            <p class="series-url"><strong>系列URL：</strong><a href="${escapeXml(seriesUrl)}">${escapeXml(seriesUrl)}</a></p>
-        </div>`;
-        }
-        
-        authorHtml += `
-    </div>
-</body>
-</html>`;
-        oebps.file("author.html", authorHtml, { compression: "STORE" });
-        
-        // 8. 生成正文内容 HTML（移除标题和简介，因为已在作者信息页）
+        // 6. 生成 HTML 内容
         let htmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
@@ -3677,6 +3739,13 @@ SOFTWARE.
 <body>
     <div class="chapter">
         <h1>${escapeXml(details.title)}</h1>`;
+        
+        if (details.description) {
+            htmlContent += `
+        <div class="description">
+            <p>${escapeXml(details.description).replace(/\n/g, '</p><p>')}</p>
+        </div>`;
+        }
         
         // 转换内容为 HTML
         if (combinedContent.format === 'md') {
@@ -3722,7 +3791,7 @@ SOFTWARE.
         
         oebps.file("chapter.html", htmlContent, { compression: "STORE" });
         
-        // 9. 生成 CSS 样式
+        // 7. 生成 CSS 样式
         const cssContent = `body {
     font-family: "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif;
     line-height: 1.8;
@@ -3734,62 +3803,6 @@ h1 {
     font-size: 1.5em;
     margin-bottom: 1em;
     text-align: center;
-}
-
-h2 {
-    font-size: 1.2em;
-    margin-top: 1.5em;
-    margin-bottom: 0.5em;
-    border-bottom: 1px solid #ccc;
-    padding-bottom: 0.3em;
-}
-
-/* 封面页样式 */
-.cover-page {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
-    text-align: center;
-}
-
-.cover-image {
-    max-width: 100%;
-    max-height: 100vh;
-    height: auto;
-    object-fit: contain;
-}
-
-.cover-title {
-    font-size: 2em;
-    margin: 0;
-}
-
-/* 作者信息页样式 */
-.author-page {
-    max-width: 800px;
-    margin: 0 auto;
-}
-
-.author-info, .novel-description, .novel-tags, .novel-series {
-    margin-bottom: 2em;
-    padding: 1em;
-    background-color: #f5f5f5;
-    border-radius: 4px;
-}
-
-.author-name, .author-url, .series-name, .series-url {
-    margin: 0.5em 0;
-}
-
-.author-url a, .series-url a {
-    color: #0066cc;
-    text-decoration: none;
-    word-break: break-all;
-}
-
-.author-url a:hover, .series-url a:hover {
-    text-decoration: underline;
 }
 
 .description {
@@ -3817,19 +3830,19 @@ p {
 }`;
         oebps.file("style.css", cssContent, { compression: "STORE" });
         
-        // 10. 生成 content.opf（元数据清单）
+        // 8. 生成 content.opf（元数据清单）
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0];
         const identifier = `https://www.pixiv.net/novel/show.php?id=${details.id}`;
-        // 使用提取的出版日期，如果没有则使用当前日期
-        const publishDate = formatEPUBDate(details.publishDate) || new Date().toISOString().split('T')[0];
         
         let opfContent = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">
     <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
         <dc:title>${escapeXml(details.title)}</dc:title>
-        <dc:creator opf:role="aut">${escapeXml(details.authorName || "Unknown")}</dc:creator>
+        <dc:creator>${escapeXml(details.authorName)}</dc:creator>
         <dc:identifier id="bookid">${escapeXml(identifier)}</dc:identifier>
         <dc:language>ja</dc:language>
-        <dc:date opf:event="publication">${publishDate}</dc:date>`;
+        <dc:date>${dateStr}</dc:date>`;
         
         if (details.description) {
             opfContent += `
@@ -3837,7 +3850,6 @@ p {
         }
         
         if (details.seriesTitle) {
-            // 直接使用details.seriesTitle（原始系列标题），与保存到eagle时的提取方法相同
             opfContent += `
         <meta name="calibre:series" content="${escapeXml(details.seriesTitle)}"/>`;
         }
@@ -3854,8 +3866,6 @@ p {
     </metadata>
     <manifest>
         <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-        <item id="cover" href="cover.html" media-type="application/xhtml+xml"/>
-        <item id="author" href="author.html" media-type="application/xhtml+xml"/>
         <item id="chapter" href="chapter.html" media-type="application/xhtml+xml"/>
         <item id="style" href="style.css" media-type="text/css"/>`;
         
@@ -3873,18 +3883,16 @@ p {
         opfContent += `
     </manifest>
     <spine toc="ncx">
-        <itemref idref="cover"/>
-        <itemref idref="author"/>
         <itemref idref="chapter"/>
     </spine>
     <guide>
-        <reference type="cover" title="封面" href="cover.html"/>
+        <reference type="cover" title="封面" href="chapter.html"/>
     </guide>
 </package>`;
         
         oebps.file("content.opf", opfContent, { compression: "STORE" });
         
-        // 11. 生成 toc.ncx（目录导航）
+        // 9. 生成 toc.ncx（目录导航）
         const tocNcx = `<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
     <head>
@@ -3898,18 +3906,6 @@ p {
     </docTitle>
     <navMap>
         <navPoint id="navpoint-1" playOrder="1">
-            <navLabel>
-                <text>封面</text>
-            </navLabel>
-            <content src="cover.html"/>
-        </navPoint>
-        <navPoint id="navpoint-2" playOrder="2">
-            <navLabel>
-                <text>作者信息</text>
-            </navLabel>
-            <content src="author.html"/>
-        </navPoint>
-        <navPoint id="navpoint-3" playOrder="3">
             <navLabel>
                 <text>${escapeXml(details.title)}</text>
             </navLabel>
@@ -3930,15 +3926,60 @@ p {
         }
         
         // 10. 生成 EPUB 文件（Blob）
+        // #region agent log
+        const zipFilesList = Object.keys(zip.files || {});
+        const zipFilesInfo = zipFilesList.slice(0, 20).map(name => {
+            const file = zip.files[name];
+            return {
+                name: name,
+                dir: file ? file.dir : false,
+                date: file ? file.date : null,
+                options: file ? file.options : null
+            };
+        });
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3904',message:'Before zip.generateAsync',data:{hasZip:!!zip,zipType:typeof zip.generateAsync,zipFilesCount:zipFilesList.length,zipFilesInfo:zipFilesInfo},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         let epubBlob;
         try {
             // 添加超时处理（120秒，因为 EPUB 生成可能需要一些时间）
             // 暂时注释掉超时处理
             // const timeoutPromise = new Promise((_, reject) => {
             //     setTimeout(() => {
+            //         // #region agent log
+            //         fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3712',message:'Timeout triggered',data:{elapsed:120000},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            //         // #endregion
             //         reject(new Error("EPUB 生成超时（120秒）"));
             //     }, 120000);
             // });
+            
+            // 不设置全局压缩，让每个文件的 compression: "STORE" 生效
+            // 尝试不使用 streamFiles，因为可能导致卡住
+            const generateStartTime = Date.now();
+            
+            // 检查所有文件的数据是否已准备好
+            let allFilesReady = true;
+            const fileCheckResults = [];
+            for (const fileName in zip.files) {
+                const file = zip.files[fileName];
+                if (!file.dir) {
+                    const hasData = file._data !== undefined && file._data !== null;
+                    fileCheckResults.push({
+                        name: fileName,
+                        hasData: hasData,
+                        dataType: file._data ? typeof file._data : 'undefined'
+                    });
+                    if (!hasData) {
+                        allFilesReady = false;
+                    }
+                }
+            }
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3921',message:'About to call zip.generateAsync',data:{hasZip:!!zip,hasGenerateAsync:typeof zip.generateAsync === 'function',allFilesReady:allFilesReady,fileCheckResults:fileCheckResults},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
+            
+            if (!allFilesReady) {
+                throw new Error("某些文件数据未准备好");
+            }
             
             // 使用 onUpdate 回调来监控进度
             let lastUpdateTime = Date.now();
@@ -3948,6 +3989,9 @@ p {
                 mimeType: "application/epub+zip",
                 onUpdate: (metadata) => {
                     const now = Date.now();
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3935',message:'generateAsync onUpdate callback',data:{percent:metadata.percent,currentFile:metadata.currentFile,remainingFiles:metadata.remainingFiles,elapsed:now-generateStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                    // #endregion
                     lastUpdateTime = now;
                     if (progressWindow) {
                         const progressPercent = 80 + Math.floor(metadata.percent * 0.2); // 80-100%
@@ -3955,6 +3999,9 @@ p {
                     }
                 }
             });
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3927',message:'generatePromise created',data:{hasPromise:!!generatePromise,startTime:generateStartTime,streamFiles:false},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             
             // 定期检查取消状态和更新进度，同时记录等待时间
             // 如果 onUpdate 回调长时间未触发，说明可能卡住了
@@ -3973,14 +4020,30 @@ p {
                     } else {
                         progressWindow.updateProgress(85, `正在压缩 EPUB 文件... (已等待 ${Math.floor(waitTime/1000)} 秒)`);
                     }
+                    // #region agent log
+                    if (waitTime % 5000 === 0) { // 每5秒记录一次
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3956',message:'Still waiting for generateAsync',data:{waitTime,elapsed:Date.now()-generateStartTime,timeSinceLastUpdate},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                    }
+                    // #endregion
                 }
             }, 500) : null;
             
             try {
                 // 暂时移除超时，直接等待 generatePromise
                 // epubBlob = await Promise.race([generatePromise, timeoutPromise]);
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3943',message:'About to await generatePromise',data:{startTime:generateStartTime},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                // #endregion
                 epubBlob = await generatePromise;
+                // #region agent log
+                const generateEndTime = Date.now();
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3945',message:'generatePromise resolved',data:{elapsed:generateEndTime-generateStartTime,hasBlob:!!epubBlob,blobSize:epubBlob?.size||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                // #endregion
             } catch (awaitError) {
+                // #region agent log
+                const generateEndTime = Date.now();
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3948',message:'generatePromise rejected',data:{elapsed:generateEndTime-generateStartTime,errorName:awaitError?.name,errorMessage:awaitError?.message,errorStack:awaitError?.stack?.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                // #endregion
                 throw awaitError;
             } finally {
                 if (progressInterval) {
@@ -3996,7 +4059,13 @@ p {
             if (progressWindow) {
                 progressWindow.updateProgress(100, 'EPUB 生成完成！');
             }
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3727',message:'After zip.generateAsync',data:{hasBlob:!!epubBlob,blobSize:epubBlob?.size||0,blobType:epubBlob?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
         } catch (genError) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3730',message:'zip.generateAsync error',data:{errorName:genError?.name,errorMessage:genError?.message,errorStack:genError?.stack?.substring(0,300)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+            // #endregion
             throw genError;
         }
         
@@ -4014,23 +4083,6 @@ p {
             .replace(/'/g, "&apos;");
     }
 
-    // 格式化日期为 EPUB 标准格式 (YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SSZ)
-    function formatEPUBDate(datetime) {
-        if (!datetime) return null;
-        try {
-            // 如果已经是 ISO 格式，直接使用
-            const date = new Date(datetime);
-            if (isNaN(date.getTime())) return null;
-            // EPUB 2.0 标准格式：YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SSZ
-            return date.toISOString().split('T')[0]; // 使用日期部分
-        } catch (error) {
-            if (getDebugMode()) {
-                console.error("[Pixiv2Eagle] 日期格式化失败:", error);
-            }
-            return null;
-        }
-    }
-
     // 获取小说详细信息
     async function getNovelDetails(novelId) {
         try {
@@ -4046,142 +4098,10 @@ p {
             const coverImg = document.querySelector(NOVEL_COVER_SELECTOR);
             const coverUrl = coverImg ? coverImg.src : null;
 
-            // 作者 - 复用 getArtistInfoFromDOM 的逻辑提取作者信息
-            // 支持两种容器类型：
-            // 1. 容器是 a 标签：<a class="sc-bypJrT bUiITy" data-gtm-value="15517627"><div>作者名</div></a>
-            // 2. 容器是 div，内部包含 a 标签：<div><a href="/users/15517627">作者名</a></div>
-            let authorId = null;
-            let authorName = null;
-            let authorLink = null;
-            
-            // 先尝试使用小说作者容器选择器
-            const authorContainer = document.querySelector(NOVEL_AUTHOR_CONTAINER_SELECTOR);
-            
-            if (authorContainer) {
-                // 判断容器类型
-                if (authorContainer.tagName === 'A') {
-                    // 容器本身就是 a 标签
-                    authorLink = authorContainer;
-                } else {
-                    // 容器是 div 或其他元素，在容器内查找 a[href^="/users/"] 链接（复用 getArtistInfoFromDOM 逻辑）
-                    authorLink = authorContainer.querySelector('a[href^="/users/"]');
-                }
-                
-                if (authorLink) {
-                    // 复用 getArtistInfoFromDOM 的提取逻辑
-                    // 从链接的 data-gtm-value 或 href 中提取 authorId
-                    authorId = authorLink.getAttribute("data-gtm-value") || authorLink.getAttribute("data-gtm-user-id");
-                    if (!authorId && authorLink.href) {
-                        const hrefMatch = authorLink.href.match(/\d+/);
-                        authorId = hrefMatch ? hrefMatch[0] : null;
-                    }
-                    
-                    // 从链接的 textContent 提取作者名（复用 getArtistInfoFromDOM 逻辑）
-                    authorName = authorLink.textContent?.trim() || "";
-                    
-                    // 如果 textContent 为空，尝试从链接内的 div 提取（兼容新结构）
-                    if (!authorName || authorName === "") {
-                        const authorNameDiv = authorLink.querySelector('div');
-                        if (authorNameDiv) {
-                            authorName = authorNameDiv.innerText?.trim() || authorNameDiv.textContent?.trim() || "";
-                        }
-                    }
-                    
-                    // 如果仍然为空，查找页面上其他包含相同用户ID的链接（可能作者名在其他链接中）
-                    if ((!authorName || authorName === "") && authorId) {
-                        // 先尝试在特定类名的链接中查找：<a class="sc-76df3bd1-6 hQXkzZ">
-                        const specificLink = document.querySelector(`a.sc-76df3bd1-6.hQXkzZ[href*="/users/${authorId}"], a.sc-76df3bd1-6.hQXkzZ[data-gtm-value="${authorId}"], a.sc-76df3bd1-6.hQXkzZ[data-gtm-user-id="${authorId}"]`);
-                        if (specificLink) {
-                            const linkText = specificLink.textContent?.trim() || specificLink.innerText?.trim() || "";
-                            // 检查是否包含有效的作者名（不是常见的操作文本）
-                            if (linkText && linkText.length > 0 && !linkText.includes('查看') && !linkText.includes('作品') && !linkText.includes('目录') && !specificLink.querySelector('figure')) {
-                                authorName = linkText;
-                            }
-                        }
-                        
-                        // 如果特定类名链接中没找到，查找所有包含相同用户ID的链接
-                        if (!authorName || authorName === "") {
-                            const allUserLinks = document.querySelectorAll(`a[href*="/users/${authorId}"], a[data-gtm-value="${authorId}"], a[data-gtm-user-id="${authorId}"]`);
-                            for (const link of allUserLinks) {
-                                const linkText = link.textContent?.trim() || link.innerText?.trim() || "";
-                                // 跳过只包含头像、空文本或常见操作文本的链接
-                                const isInvalidText = !linkText || linkText.length === 0 || 
-                                    link.querySelector('figure') ||
-                                    linkText.includes('查看') || 
-                                    linkText.includes('作品') || 
-                                    linkText.includes('目录') ||
-                                    linkText.includes('关注') ||
-                                    linkText.includes('粉丝');
-                                if (!isInvalidText) {
-                                    authorName = linkText;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // 如果主选择器找不到，尝试备用方法（复用 getArtistInfoFromDOM 的逻辑）
-            if (!authorLink) {
-                // 尝试直接查找 a[href^="/users/"] 链接
-                const fallbackLink = document.querySelector('a[href^="/users/"][data-gtm-value], a[href^="/users/"][data-gtm-user-id]');
-                if (fallbackLink) {
-                    authorLink = fallbackLink;
-                    authorId = fallbackLink.getAttribute("data-gtm-value") || fallbackLink.getAttribute("data-gtm-user-id");
-                    if (!authorId && fallbackLink.href) {
-                        const hrefMatch = fallbackLink.href.match(/\d+/);
-                        authorId = hrefMatch ? hrefMatch[0] : null;
-                    }
-                    authorName = fallbackLink.textContent?.trim() || "";
-                    
-                    // 如果备用链接的textContent也为空，查找页面上其他包含相同用户ID的链接
-                    if ((!authorName || authorName === "") && authorId) {
-                        // 先尝试在特定类名的链接中查找：<a class="sc-76df3bd1-6 hQXkzZ">
-                        const specificLink = document.querySelector(`a.sc-76df3bd1-6.hQXkzZ[href*="/users/${authorId}"], a.sc-76df3bd1-6.hQXkzZ[data-gtm-value="${authorId}"], a.sc-76df3bd1-6.hQXkzZ[data-gtm-user-id="${authorId}"]`);
-                        if (specificLink) {
-                            const linkText = specificLink.textContent?.trim() || specificLink.innerText?.trim() || "";
-                            // 检查是否包含有效的作者名（不是常见的操作文本）
-                            if (linkText && linkText.length > 0 && !linkText.includes('查看') && !linkText.includes('作品') && !linkText.includes('目录') && !specificLink.querySelector('figure')) {
-                                authorName = linkText;
-                            }
-                        }
-                        
-                        // 如果特定类名链接中没找到，查找所有包含相同用户ID的链接
-                        if (!authorName || authorName === "") {
-                            const allUserLinks = document.querySelectorAll(`a[href*="/users/${authorId}"], a[data-gtm-value="${authorId}"], a[data-gtm-user-id="${authorId}"]`);
-                            for (const link of allUserLinks) {
-                                const linkText = link.textContent?.trim() || link.innerText?.trim() || "";
-                                // 跳过只包含头像、空文本或常见操作文本的链接
-                                const isInvalidText = !linkText || linkText.length === 0 || 
-                                    link.querySelector('figure') ||
-                                    linkText.includes('查看') || 
-                                    linkText.includes('作品') || 
-                                    linkText.includes('目录') ||
-                                    linkText.includes('关注') ||
-                                    linkText.includes('粉丝');
-                                if (!isInvalidText) {
-                                    authorName = linkText;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            
-            // 如果仍然没有找到，使用默认值
-            if (!authorName || authorName === "") {
-                authorName = "Unknown";
-            }
-            
-            if (getDebugMode()) {
-                if (authorName && authorName !== "Unknown") {
-                    console.log("[Pixiv2Eagle] 提取到作者名:", authorName, "作者UID:", authorId);
-                } else {
-                    console.log("[Pixiv2Eagle] 未提取到作者名，使用默认值:", authorName);
-                }
-            }
+            // 作者
+            const authorLink = document.querySelector(NOVEL_AUTHOR_SELECTOR);
+            const authorId = authorLink ? authorLink.getAttribute("data-gtm-value") : null;
+            const authorName = authorLink ? authorLink.textContent.trim() : "Unknown";
 
             // 系列信息
             const seriesSection = document.querySelector(NOVEL_SERIES_SECTION_SELECTOR);
@@ -4189,41 +4109,21 @@ p {
             let seriesTitle = null;
             
             if (seriesSection) {
-                // 优先从 h2.sc-edf844cc-2.emSEGV 获取系列标题
-                const seriesTitleElement = document.querySelector(NOVEL_SERIES_TITLE_SELECTOR);
-                if (seriesTitleElement) {
-                    let rawSeriesTitle = seriesTitleElement.textContent.trim();
-                    // 去除"系列"前缀，获取原始系列名称
-                    if (rawSeriesTitle.startsWith('系列')) {
-                        seriesTitle = rawSeriesTitle.substring(2).trim();
-                    } else {
-                        seriesTitle = rawSeriesTitle;
-                    }
-                }
-                
-                // 从系列链接获取系列ID（如果还没有获取到系列标题，也从链接中提取）
                 const seriesLink = document.querySelector(NOVEL_SERIES_LINK_SELECTOR);
                 if (seriesLink) {
                     const match = seriesLink.getAttribute("href").match(/\/novel\/series\/(\d+)/);
                     if (match) {
                         seriesId = match[1];
-                        // 如果还没有从h2元素获取到系列标题，则从链接中提取
-                        if (!seriesTitle) {
-                            // 从页面提取原始文本，然后去除"系列"前缀以获取原始系列名称
-                            let rawSeriesTitle = seriesLink.textContent.trim();
-                            // 去除"系列"前缀，获取原始系列名称
-                            if (rawSeriesTitle.startsWith('系列')) {
-                                seriesTitle = rawSeriesTitle.substring(2).trim();
-                            } else {
-                                seriesTitle = rawSeriesTitle;
-                            }
-                        }
+                        seriesTitle = seriesLink.textContent.trim();
                     }
                 }
             }
 
             // 内容 - 尝试多种选择器
             let contentContainer = document.querySelector(NOVEL_CONTENT_SELECTOR);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3737',message:'getNovelDetails content extraction - primary selector',data:{hasContentContainer:!!contentContainer,selector:NOVEL_CONTENT_SELECTOR},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
             
             // 如果主选择器失败，尝试备用选择器
             if (!contentContainer) {
@@ -4237,6 +4137,9 @@ p {
                 for (const selector of partialSelectors) {
                     contentContainer = document.querySelector(selector);
                     if (contentContainer) {
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3745',message:'Content container found with fallback selector',data:{selector,className:contentContainer.className},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         break;
                     }
                 }
@@ -4252,6 +4155,9 @@ p {
                         const textLength = Array.from(paragraphs).reduce((sum, p) => sum + (p.textContent?.length || 0), 0);
                         if (textLength > 100) {  // 总文本长度超过 100 字符
                             contentContainer = div;
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3758',message:'Content container found by paragraph search',data:{paragraphCount:paragraphs.length,textLength,className:div.className},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                            // #endregion
                             break;
                         }
                     }
@@ -4266,6 +4172,9 @@ p {
                 // 检查是否包含图片
                 const imgElements = Array.from(contentContainer.querySelectorAll("img"));
                 hasImages = imgElements.length > 0;
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3745',message:'Content container found',data:{hasImages,imageCount:imgElements.length,childrenCount:contentContainer.children.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
                 
                 // 提取图片信息
                 if (hasImages) {
@@ -4295,44 +4204,17 @@ p {
                 }
                 
                 const paragraphs = Array.from(contentContainer.querySelectorAll("p"));
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3774',message:'Paragraph extraction',data:{paragraphCount:paragraphs.length,allElementsCount:allElements.length,startIndex},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
                 content = paragraphs.map(p => p.textContent).join("\n");
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3775',message:'Content extracted',data:{contentLength:content.length,contentPreview:content.substring(0,100)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
             } else {
-            }
-
-            // 提取标签
-            const tagsContainer = document.querySelector(NOVEL_TAGS_CONTAINER_SELECTOR);
-            const tags = [];
-            if (tagsContainer) {
-                const tagItems = tagsContainer.querySelectorAll(NOVEL_TAG_ITEM_SELECTOR);
-                for (const tagItem of tagItems) {
-                    const tagText = tagItem.textContent?.trim();
-                    if (tagText) {
-                        tags.push(tagText);
-                    }
-                }
-                if (getDebugMode()) {
-                    console.log("[Pixiv2Eagle] 提取到小说标签:", tags);
-                }
-            } else {
-                if (getDebugMode()) {
-                    console.log("[Pixiv2Eagle] 未找到标签容器");
-                }
-            }
-
-            // 提取出版日期
-            let publishDate = null;
-            const dateContainer = document.querySelector(NOVEL_PUBLISH_DATE_CONTAINER_SELECTOR);
-            if (dateContainer) {
-                const timeEl = dateContainer.querySelector('time');
-                if (timeEl) {
-                    const datetime = timeEl.getAttribute('datetime');
-                    if (datetime) {
-                        publishDate = datetime;
-                        if (getDebugMode()) {
-                            console.log("[Pixiv2Eagle] 提取到出版日期:", publishDate);
-                        }
-                    }
-                }
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3776',message:'Content container not found',data:{selector:NOVEL_CONTENT_SELECTOR},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
             }
 
             return {
@@ -4347,8 +4229,6 @@ p {
                 content,
                 images,
                 hasImages,
-                tags,
-                publishDate,
                 illustType: "novel"
             };
         } catch (error) {
@@ -4388,7 +4268,7 @@ p {
             name: `${safeTitle}.${novelExt}`,
             website: novelUrl,
             annotation: details.id,
-            tags: details.tags || [],
+            tags: [],
             folderId: chapterFolderId
         });
         
@@ -4404,7 +4284,7 @@ p {
                         name: imageInfo.filename,
                         website: novelUrl,
                         annotation: details.id,
-                        tags: details.tags || [],
+                        tags: [],
                         folderId: chapterFolderId
                     });
                 }
@@ -4437,21 +4317,48 @@ p {
 
     // 保存当前小说到 Eagle
     async function saveCurrentNovel() {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3861',message:'saveCurrentNovel entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         const folderId = getFolderId();
         const folderInfo = folderId ? `Pixiv 文件夹 ID: ${folderId}` : "未设置 Pixiv 文件夹 ID";
 
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3875',message:'Before await checkEagle',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         let eagleStatus;
         try {
             eagleStatus = await checkEagle();
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3876',message:'After await checkEagle',data:{hasEagleStatus:!!eagleStatus,eagleRunning:eagleStatus?.running,hasRunning:typeof eagleStatus?.running!=='undefined'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3880',message:'checkEagle threw error',data:{errorName:error?.name,errorMessage:error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             showMessage(`${folderInfo}\n检查 Eagle 状态时出错: ${error.message}`, true);
             return;
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3883',message:'Before eagleStatus.running check',data:{eagleRunning:eagleStatus?.running},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         if (!eagleStatus || !eagleStatus.running) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3884',message:'Eagle not running, returning',data:{eagleRunning:eagleStatus?.running},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             const errorMsg = `${folderInfo}\nEagle 未启动，请先启动 Eagle 应用！`;
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3898',message:'Calling showMessage with forceShow=true',data:{messageLength:errorMsg.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             showMessage(errorMsg, true);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3900',message:'After showMessage call',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             return;
         }
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3889',message:'Eagle is running, continuing',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
 
         const novelId = getNovelId();
         if (!novelId) {
@@ -4460,7 +4367,13 @@ p {
         }
 
         try {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3877',message:'Before getNovelDetails',data:{novelId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             const details = await getNovelDetails(novelId);
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3878',message:'After getNovelDetails',data:{hasDetails:!!details,hasAuthorId:!!details?.authorId,hasContent:!!details?.content},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+            // #endregion
             if (!details.authorId) {
                 throw new Error("无法获取作者信息");
             }
@@ -4495,15 +4408,9 @@ p {
                 }
                 
                 if (!seriesFolderId) {
-                    // 使用与EPUB相同的逻辑：先去除可能存在的"系列"前缀，然后添加"系列:"前缀
-                    let cleanSeriesTitle = details.seriesTitle;
-                    if (cleanSeriesTitle.startsWith('系列')) {
-                        cleanSeriesTitle = cleanSeriesTitle.substring(2).trim();
-                    }
-                    const seriesFolderName = `系列:${cleanSeriesTitle}`;
-                    seriesFolderId = await createEagleFolder(seriesFolderName, targetParentId, seriesUrl);
+                    seriesFolderId = await createEagleFolder(details.seriesTitle, targetParentId, seriesUrl);
                     if (parentFolderObj && parentFolderObj.children) {
-                        const newSeriesObj = { id: seriesFolderId, name: seriesFolderName, description: seriesUrl, children: [] };
+                        const newSeriesObj = { id: seriesFolderId, name: details.seriesTitle, description: seriesUrl, children: [] };
                         parentFolderObj.children.push(newSeriesObj);
                         parentFolderObj = newSeriesObj;
                     }
@@ -4555,34 +4462,86 @@ p {
             }
 
             // 5.3 正文 - 根据配置选择保存格式
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4022',message:'Before content check',data:{hasContent:!!details.content,contentLength:details.content?.length||0,contentPreview:details.content?.substring(0,50)||''},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+            // #endregion
             if (details.content) {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4025',message:'Content exists, getting save format',data:{hasContent:!!details.content,contentLength:details.content.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 const saveFormat = getNovelSaveFormat();
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:3968',message:'After getNovelSaveFormat',data:{saveFormat},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                // #endregion
                 
                 if (saveFormat === 'epub') {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4032',message:'EPUB format branch',data:{saveFormat},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     // EPUB 格式保存
                     const progressWindow = createEPUBProgressWindow();
                     try {
                         // 组合小说内容
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4041',message:'Before combineNovelContent',data:{hasDetails:!!details,hasContent:!!details.content},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         const combinedContent = combineNovelContent(details);
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4042',message:'After combineNovelContent',data:{format:combinedContent?.format,contentLength:combinedContent?.content?.length||0,imageCount:combinedContent?.images?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         
                         // 生成 EPUB
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4122',message:'Before generateEPUB',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         let epubBlob;
                         try {
                             epubBlob = await generateEPUB(details, combinedContent, progressWindow);
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4126',message:'After generateEPUB',data:{hasBlob:!!epubBlob,blobSize:epubBlob?.size||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                            // #endregion
                         } catch (genError) {
+                            // #region agent log
+                            const errorInfo = {
+                                errorName: genError?.name || 'Unknown',
+                                errorMessage: genError?.message || String(genError),
+                                errorStack: genError?.stack ? genError.stack.substring(0, 500) : 'No stack trace',
+                                errorString: String(genError),
+                                errorType: typeof genError
+                            };
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4129',message:'generateEPUB threw error',data:errorInfo,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                            // #endregion
                             throw genError;
                         }
                         
                         // 下载 EPUB 文件到本地
                 const safeTitle = details.title.replace(/[\\/:*?"<>|]/g, "_");
                         const epubFilename = `${safeTitle}.epub`;
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4135',message:'Before downloadFile',data:{epubFilename,blobSize:epubBlob?.size||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         downloadFile(epubBlob, epubFilename);
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4137',message:'After downloadFile',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         
                         // 等待用户下载完成
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4140',message:'Before 2s delay',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         await new Promise(resolve => setTimeout(resolve, 2000));
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4142',message:'After 2s delay',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         
                         // 获取文件路径
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4145',message:'Before getNovelSavePath',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         const basePath = getNovelSavePath();
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4147',message:'After getNovelSavePath',data:{hasBasePath:!!basePath,basePath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                        // #endregion
                         let epubPath;
                         
                         if (basePath) {
@@ -4591,7 +4550,13 @@ p {
                                 ? basePath.slice(0, -1) 
                                 : basePath;
                             epubPath = `${normalizedBasePath}${separator}${epubFilename}`;
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4154',message:'Using basePath for epubPath',data:{epubPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                            // #endregion
                         } else {
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4156',message:'Prompting for epubPath',data:{epubFilename},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                            // #endregion
                             epubPath = prompt(
                                 `请输入 EPUB 文件的完整路径：\n\n文件名：${epubFilename}\n\n示例：C:\\Users\\YourName\\Downloads\\${epubFilename}`,
                                 ""
@@ -4601,14 +4566,16 @@ p {
                                 throw new Error("未提供 EPUB 文件路径");
                             }
                             epubPath = epubPath.trim();
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4164',message:'User provided epubPath',data:{epubPath},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+                            // #endregion
                         }
                         
                         // 使用 addFromPath 添加 EPUB 文件
                         const novelUrl = `https://www.pixiv.net/novel/show.php?id=${details.id}`;
-                        const epubTags = details.tags || [];
-                        if (getDebugMode()) {
-                            console.log("[Pixiv2Eagle] 保存 EPUB 文件，标签:", epubTags);
-                        }
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4078',message:'Before addFromPath API call',data:{epubPath,epubFilename,chapterFolderId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         const addResult = await gmFetch("http://localhost:41595/api/item/addFromPath", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -4617,10 +4584,13 @@ p {
                                 name: epubFilename,
                                 website: novelUrl,
                         annotation: details.id,
-                        tags: epubTags,
+                        tags: [],
                         folderId: chapterFolderId
                     })
                 });
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4091',message:'After addFromPath API call',data:{status:addResult?.status,hasData:!!addResult?.data,result:JSON.stringify(addResult).substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         
                         if (!addResult || !addResult.status) {
                             if (getDebugMode()) {
@@ -4628,7 +4598,20 @@ p {
                             }
                             throw new Error("添加 EPUB 文件到 Eagle 失败");
                         }
+                        // #region agent log
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4097',message:'EPUB file added successfully',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                     } catch (error) {
+                        // #region agent log
+                        const errorInfo = {
+                            errorName: error?.name || 'Unknown',
+                            errorMessage: error?.message || String(error),
+                            errorStack: error?.stack ? error.stack.substring(0, 500) : 'No stack trace',
+                            errorString: String(error),
+                            errorType: typeof error
+                        };
+                        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4098',message:'EPUB generation error',data:errorInfo,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                        // #endregion
                         console.error("生成或保存 EPUB 失败:", error);
                         // EPUB 生成失败，不再回退到 TXT/MD 格式
                         // 注释掉回退逻辑，直接抛出错误
@@ -4643,10 +4626,16 @@ p {
                         }
                     }
                 } else {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4105',message:'TXT/MD format branch',data:{saveFormat},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+                    // #endregion
                     // TXT/MD 格式保存（原有逻辑）
                     await saveNovelAsTextOrMarkdown(details, null, chapterFolderId);
                 }
             } else {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4110',message:'No content, skipping save',data:{hasContent:!!details.content,contentLength:details.content?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+                // #endregion
             }
 
             showMessage(`✅ 小说 "${details.title}" 已保存到 Eagle`);
@@ -4659,6 +4648,9 @@ p {
             }
 
         } catch (error) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4031',message:'saveCurrentNovel error caught',data:{errorName:error?.name,errorMessage:error?.message,errorStack:error?.stack?.substring(0,300)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
+            // #endregion
             console.error(error);
             showMessage(`保存小说失败: ${error.message}`, true);
         }
@@ -4765,7 +4757,13 @@ p {
         buttonWrapper.style.marginTop = "16px";
 
         const saveButton = createPixivStyledButton("保存到 Eagle");
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4161',message:'Button created, adding click listener',data:{hasSaveCurrentNovel:typeof saveCurrentNovel==='function'},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+        // #endregion
         saveButton.addEventListener("click", function(e) {
+            // #region agent log
+            fetch('http://127.0.0.1:7242/ingest/dd256caa-667a-4544-bfa7-01a58e0bd061',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'Pixiv.js:4162',message:'Button click event triggered',data:{eventType:e?.type},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+            // #endregion
             saveCurrentNovel();
         });
 
@@ -4787,11 +4785,8 @@ p {
         const seriesId = seriesIdMatch ? seriesIdMatch[1] : null;
         if (!seriesId) return;
         
-        // 容器本身就是 a 标签，直接从中获取作者UID
-        const authorContainer = document.querySelector(NOVEL_AUTHOR_CONTAINER_SELECTOR);
-        if (!authorContainer) return;
-        
-        const authorId = authorContainer.getAttribute("data-gtm-value") || authorContainer.getAttribute("data-gtm-user-id");
+        const authorLink = document.querySelector(NOVEL_SERIES_AUTHOR_LINK_SELECTOR);
+        const authorId = authorLink ? authorLink.getAttribute("data-gtm-user-id") : null;
         if (!authorId) return;
         
         const pixivFolderId = getFolderId();
@@ -4871,18 +4866,27 @@ p {
             const refButton = document.querySelector(ARTWORK_BUTTON_REF_SELECTOR);
             
             if (!container) {
-                if (getDebugMode()) {
-                    console.log('[Pixiv2Eagle] 未找到按钮容器:', ARTWORK_BUTTON_CONTAINER_SELECTOR);
-                }
+                console.log('[Pixiv2Eagle] 未找到按钮容器:', ARTWORK_BUTTON_CONTAINER_SELECTOR);
+                console.log('[Pixiv2Eagle] 尝试查找所有可能的容器...');
+                const allDivs = document.querySelectorAll('div[class*="sc-7fd477ff"]');
+                console.log('[Pixiv2Eagle] 找到的相关容器:', allDivs.length);
+                allDivs.forEach((div, idx) => {
+                    console.log(`[Pixiv2Eagle] 容器 ${idx}:`, div.className);
+                });
                 return;
             }
 
-            if (!refButton && getDebugMode()) {
+            if (!refButton) {
                 console.log('[Pixiv2Eagle] 未找到参考按钮:', ARTWORK_BUTTON_REF_SELECTOR);
+                console.log('[Pixiv2Eagle] 容器内所有子元素:');
+                Array.from(container.children).forEach((child, idx) => {
+                    console.log(`[Pixiv2Eagle] 子元素 ${idx}:`, child.className, child.tagName);
+                });
             }
 
             // 4. 避免重复添加
             if (document.getElementById('eagle-move-to-subfolder-btn')) {
+                console.log('[Pixiv2Eagle] 按钮已存在');
                 return;
             }
 
@@ -4905,9 +4909,7 @@ p {
                 // 如果没有参考按钮，直接添加到容器末尾
                 container.appendChild(btn);
             }
-            if (getDebugMode()) {
-                console.log('[Pixiv2Eagle] ✅ 成功添加"移动到子文件夹"按钮');
-            }
+            console.log('[Pixiv2Eagle] ✅ 成功添加"移动到子文件夹"按钮');
 
         } catch (error) {
             console.error('[Pixiv2Eagle] ❌ 添加"移动到子文件夹"按钮失败:', error);
@@ -5007,18 +5009,14 @@ p {
 
     // 启动脚本
     try {
-        if (getDebugMode()) {
-            console.log('[Pixiv2Eagle] 脚本已启动，当前URL:', location.pathname);
-        }
+        console.log('[Pixiv2Eagle] 脚本已启动，当前URL:', location.pathname);
         
         // 立即开始构建全局索引
         ensureEagleIndex();
 
         for (const monitorInfo of monitorConfig) {
             if (location.pathname.includes(monitorInfo.urlSuffix)) {
-                if (getDebugMode()) {
-                    console.log('[Pixiv2Eagle] 初始加载时触发处理器:', monitorInfo.urlSuffix);
-                }
+                console.log('[Pixiv2Eagle] 初始加载时触发处理器:', monitorInfo.urlSuffix);
                 handlePageChange(monitorInfo);
             }
         }
