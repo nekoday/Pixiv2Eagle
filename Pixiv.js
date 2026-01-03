@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.2.3
+// @version         2.2.3.12
 
 // @author          nekoday,juzijun233
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -81,11 +81,11 @@ SOFTWARE.
     const NOVEL_SERIES_DESC_SELECTOR = 'div.sc-fcc502d1-0.jNYFaO > p.sc-fcc502d1-1.fDflWh'; // 小说系列简介
     const NOVEL_COVER_SELECTOR = 'img.sc-41178ccf-19.cKuUeg'; // 小说封面图片
     const NOVEL_SERIES_COVER_SELECTOR = 'img.sc-11435b73-2.hnPyQB'; // 小说系列封面图片
-    const NOVEL_AUTHOR_SELECTOR = 'h2.sc-b6a5d604-0.kepWbf a[data-gtm-value]'; // 小说作者链接 (含 ID)
-    const NOVEL_SERIES_AUTHOR_SELECTOR = 'h2.sc-b6a5d604-0.kepWbf a[data-gtm-user-id]'; // 小说系列作者链接 (含 ID)
+    const NOVEL_AUTHOR_CONTAINER_SELECTOR = 'a.sc-bypJrT.bUiITy'; // 小说作者信息容器（a标签，包含作者UID和作者名）
     const NOVEL_CONTENT_SELECTOR = 'div.sc-ejfMa-d.fldORf'; // 小说正文内容容器
     const NOVEL_SERIES_SECTION_SELECTOR = 'section.sc-55920ee2-1'; // 小说所属系列区域 (用于判断是否属于系列)
     const NOVEL_SERIES_LINK_SELECTOR = 'a.sc-13d2e2cd-0.gwOqfd[href^="/novel/series/"]'; // 小说系列链接
+    const NOVEL_SERIES_TITLE_SELECTOR = 'h2.sc-edf844cc-2.emSEGV'; // 小说系列标题
     const NOVEL_SAVE_BUTTON_SECTION_SELECTOR = 'section.sc-44936c9d-0.bmSdAW'; // 小说保存按钮插入位置
     const NOVEL_CHAPTER_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列章节列表容器
     const NOVEL_SERIES_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列列表容器 (别名，与 NOVEL_CHAPTER_LIST_SELECTOR 相同)
@@ -93,7 +93,9 @@ SOFTWARE.
     const NOVEL_CHAPTER_ITEM_CONTAINER_SELECTOR = 'div.sc-3a91e6c3-6.eJoreT'; // 小说章节列表项容器 (用于插入标记)
     const NOVEL_CHAPTER_BADGE_CONTAINER_SELECTOR = 'div.sc-3a91e6c3-6.eJoreT'; // 小说章节标记容器 (与 NOVEL_CHAPTER_ITEM_CONTAINER_SELECTOR 相同)
     const NOVEL_CHAPTER_REF_BUTTON_SELECTOR = 'button.sc-5d3311e8-0.iGxyRb'; // 小说章节列表参考按钮 (标记插在此之前)
-    const NOVEL_SERIES_AUTHOR_LINK_SELECTOR = 'h2.sc-b6a5d604-0.kepWbf a[data-gtm-user-id]'; // 小说系列作者链接 (与 NOVEL_SERIES_AUTHOR_SELECTOR 相同)
+    const NOVEL_TAGS_CONTAINER_SELECTOR = 'footer.sc-41178ccf-4.RaSaf'; // 小说标签容器
+    const NOVEL_TAG_ITEM_SELECTOR = 'ul.sc-bb0ca45a-0.feaSLI li'; // 小说标签项（位于 footer 内的 ul 列表中）
+    const NOVEL_PUBLISH_DATE_CONTAINER_SELECTOR = 'div.sc-a5165759-0.lbROcw'; // 小说出版日期容器
 
     // DOM Selectors - Misc
     const SERIES_NAV_BUTTON_SELECTOR = 'div.sc-487e14c9-0.doUXUo'; // 漫画系列"加入追更"按钮 (用于判断是否为漫画系列)
@@ -2582,9 +2584,10 @@ SOFTWARE.
             if (
                 !location.pathname.includes('/illustrations') &&
                 !location.pathname.includes('/manga') &&
-                !location.pathname.includes('/series/')
+                !location.pathname.includes('/series/') &&
+                !location.pathname.includes('/artworks')
             ) {
-                log('当前页面非 artist illustrations/manga/series 页面，跳过');
+                log('当前页面非 artist illustrations/manga/series/artworks 页面，跳过');
                 return;
             }
 
@@ -3593,7 +3596,76 @@ SOFTWARE.
             progressWindow.updateProgress(50, '正在生成 HTML 内容...');
         }
         
-        // 6. 生成 HTML 内容
+        // 6. 生成封面页 HTML
+        let coverHtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+    <meta charset="UTF-8"/>
+    <title>封面</title>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+    <div class="cover-page">
+        ${coverImagePath ? `<img src="${coverImagePath}" alt="${escapeXml(details.title)}" class="cover-image"/>` : `<h1 class="cover-title">${escapeXml(details.title)}</h1>`}
+    </div>
+</body>
+</html>`;
+        oebps.file("cover.html", coverHtml, { compression: "STORE" });
+        
+        // 7. 生成作者信息页 HTML
+        const authorUrl = details.authorId ? `https://www.pixiv.net/users/${details.authorId}` : '';
+        let authorHtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head>
+    <meta charset="UTF-8"/>
+    <title>作者信息</title>
+    <link rel="stylesheet" type="text/css" href="style.css"/>
+</head>
+<body>
+    <div class="author-page">
+        <h1>${escapeXml(details.title)}</h1>
+        <div class="author-info">
+            <h2>作者信息</h2>
+            <p class="author-name"><strong>作者：</strong>${escapeXml(details.authorName || "Unknown")}</p>
+            ${authorUrl ? `<p class="author-url"><strong>Pixiv：</strong><a href="${escapeXml(authorUrl)}">${escapeXml(authorUrl)}</a></p>` : ''}
+        </div>`;
+        
+        if (details.description) {
+            authorHtml += `
+        <div class="novel-description">
+            <h2>小说简介</h2>
+            <p>${escapeXml(details.description).replace(/\n/g, '</p><p>')}</p>
+        </div>`;
+        }
+        
+        if (details.tags && details.tags.length > 0) {
+            authorHtml += `
+        <div class="novel-tags">
+            <h2>小说标签</h2>
+            <p>${details.tags.map(tag => escapeXml(tag)).join('、')}</p>
+        </div>`;
+        }
+        
+        if (details.seriesTitle && details.seriesId) {
+            const seriesUrl = `https://www.pixiv.net/novel/series/${details.seriesId}`;
+            // 直接使用details.seriesTitle（原始系列标题），与保存到eagle时的提取方法相同，但不添加"系列:"前缀
+            authorHtml += `
+        <div class="novel-series">
+            <h2>系列信息</h2>
+            <p class="series-name"><strong>系列名：</strong>${escapeXml(details.seriesTitle)}</p>
+            <p class="series-url"><strong>系列URL：</strong><a href="${escapeXml(seriesUrl)}">${escapeXml(seriesUrl)}</a></p>
+        </div>`;
+        }
+        
+        authorHtml += `
+    </div>
+</body>
+</html>`;
+        oebps.file("author.html", authorHtml, { compression: "STORE" });
+        
+        // 8. 生成正文内容 HTML（移除标题和简介，因为已在作者信息页）
         let htmlContent = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
@@ -3605,13 +3677,6 @@ SOFTWARE.
 <body>
     <div class="chapter">
         <h1>${escapeXml(details.title)}</h1>`;
-        
-        if (details.description) {
-            htmlContent += `
-        <div class="description">
-            <p>${escapeXml(details.description).replace(/\n/g, '</p><p>')}</p>
-        </div>`;
-        }
         
         // 转换内容为 HTML
         if (combinedContent.format === 'md') {
@@ -3657,7 +3722,7 @@ SOFTWARE.
         
         oebps.file("chapter.html", htmlContent, { compression: "STORE" });
         
-        // 7. 生成 CSS 样式
+        // 9. 生成 CSS 样式
         const cssContent = `body {
     font-family: "Hiragino Mincho ProN", "Yu Mincho", "MS PMincho", serif;
     line-height: 1.8;
@@ -3669,6 +3734,62 @@ h1 {
     font-size: 1.5em;
     margin-bottom: 1em;
     text-align: center;
+}
+
+h2 {
+    font-size: 1.2em;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 0.3em;
+}
+
+/* 封面页样式 */
+.cover-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    text-align: center;
+}
+
+.cover-image {
+    max-width: 100%;
+    max-height: 100vh;
+    height: auto;
+    object-fit: contain;
+}
+
+.cover-title {
+    font-size: 2em;
+    margin: 0;
+}
+
+/* 作者信息页样式 */
+.author-page {
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.author-info, .novel-description, .novel-tags, .novel-series {
+    margin-bottom: 2em;
+    padding: 1em;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+.author-name, .author-url, .series-name, .series-url {
+    margin: 0.5em 0;
+}
+
+.author-url a, .series-url a {
+    color: #0066cc;
+    text-decoration: none;
+    word-break: break-all;
+}
+
+.author-url a:hover, .series-url a:hover {
+    text-decoration: underline;
 }
 
 .description {
@@ -3696,19 +3817,19 @@ p {
 }`;
         oebps.file("style.css", cssContent, { compression: "STORE" });
         
-        // 8. 生成 content.opf（元数据清单）
-        const now = new Date();
-        const dateStr = now.toISOString().split('T')[0];
+        // 10. 生成 content.opf（元数据清单）
         const identifier = `https://www.pixiv.net/novel/show.php?id=${details.id}`;
+        // 使用提取的出版日期，如果没有则使用当前日期
+        const publishDate = formatEPUBDate(details.publishDate) || new Date().toISOString().split('T')[0];
         
         let opfContent = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" unique-identifier="bookid" version="2.0">
     <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
         <dc:title>${escapeXml(details.title)}</dc:title>
-        <dc:creator>${escapeXml(details.authorName)}</dc:creator>
+        <dc:creator opf:role="aut">${escapeXml(details.authorName || "Unknown")}</dc:creator>
         <dc:identifier id="bookid">${escapeXml(identifier)}</dc:identifier>
         <dc:language>ja</dc:language>
-        <dc:date>${dateStr}</dc:date>`;
+        <dc:date opf:event="publication">${publishDate}</dc:date>`;
         
         if (details.description) {
             opfContent += `
@@ -3716,6 +3837,7 @@ p {
         }
         
         if (details.seriesTitle) {
+            // 直接使用details.seriesTitle（原始系列标题），与保存到eagle时的提取方法相同
             opfContent += `
         <meta name="calibre:series" content="${escapeXml(details.seriesTitle)}"/>`;
         }
@@ -3732,6 +3854,8 @@ p {
     </metadata>
     <manifest>
         <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+        <item id="cover" href="cover.html" media-type="application/xhtml+xml"/>
+        <item id="author" href="author.html" media-type="application/xhtml+xml"/>
         <item id="chapter" href="chapter.html" media-type="application/xhtml+xml"/>
         <item id="style" href="style.css" media-type="text/css"/>`;
         
@@ -3749,16 +3873,18 @@ p {
         opfContent += `
     </manifest>
     <spine toc="ncx">
+        <itemref idref="cover"/>
+        <itemref idref="author"/>
         <itemref idref="chapter"/>
     </spine>
     <guide>
-        <reference type="cover" title="封面" href="chapter.html"/>
+        <reference type="cover" title="封面" href="cover.html"/>
     </guide>
 </package>`;
         
         oebps.file("content.opf", opfContent, { compression: "STORE" });
         
-        // 9. 生成 toc.ncx（目录导航）
+        // 11. 生成 toc.ncx（目录导航）
         const tocNcx = `<?xml version="1.0" encoding="UTF-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
     <head>
@@ -3772,6 +3898,18 @@ p {
     </docTitle>
     <navMap>
         <navPoint id="navpoint-1" playOrder="1">
+            <navLabel>
+                <text>封面</text>
+            </navLabel>
+            <content src="cover.html"/>
+        </navPoint>
+        <navPoint id="navpoint-2" playOrder="2">
+            <navLabel>
+                <text>作者信息</text>
+            </navLabel>
+            <content src="author.html"/>
+        </navPoint>
+        <navPoint id="navpoint-3" playOrder="3">
             <navLabel>
                 <text>${escapeXml(details.title)}</text>
             </navLabel>
@@ -3876,6 +4014,23 @@ p {
             .replace(/'/g, "&apos;");
     }
 
+    // 格式化日期为 EPUB 标准格式 (YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SSZ)
+    function formatEPUBDate(datetime) {
+        if (!datetime) return null;
+        try {
+            // 如果已经是 ISO 格式，直接使用
+            const date = new Date(datetime);
+            if (isNaN(date.getTime())) return null;
+            // EPUB 2.0 标准格式：YYYY-MM-DD 或 YYYY-MM-DDTHH:MM:SSZ
+            return date.toISOString().split('T')[0]; // 使用日期部分
+        } catch (error) {
+            if (getDebugMode()) {
+                console.error("[Pixiv2Eagle] 日期格式化失败:", error);
+            }
+            return null;
+        }
+    }
+
     // 获取小说详细信息
     async function getNovelDetails(novelId) {
         try {
@@ -3891,10 +4046,142 @@ p {
             const coverImg = document.querySelector(NOVEL_COVER_SELECTOR);
             const coverUrl = coverImg ? coverImg.src : null;
 
-            // 作者
-            const authorLink = document.querySelector(NOVEL_AUTHOR_SELECTOR);
-            const authorId = authorLink ? authorLink.getAttribute("data-gtm-value") : null;
-            const authorName = authorLink ? authorLink.textContent.trim() : "Unknown";
+            // 作者 - 复用 getArtistInfoFromDOM 的逻辑提取作者信息
+            // 支持两种容器类型：
+            // 1. 容器是 a 标签：<a class="sc-bypJrT bUiITy" data-gtm-value="15517627"><div>作者名</div></a>
+            // 2. 容器是 div，内部包含 a 标签：<div><a href="/users/15517627">作者名</a></div>
+            let authorId = null;
+            let authorName = null;
+            let authorLink = null;
+            
+            // 先尝试使用小说作者容器选择器
+            const authorContainer = document.querySelector(NOVEL_AUTHOR_CONTAINER_SELECTOR);
+            
+            if (authorContainer) {
+                // 判断容器类型
+                if (authorContainer.tagName === 'A') {
+                    // 容器本身就是 a 标签
+                    authorLink = authorContainer;
+                } else {
+                    // 容器是 div 或其他元素，在容器内查找 a[href^="/users/"] 链接（复用 getArtistInfoFromDOM 逻辑）
+                    authorLink = authorContainer.querySelector('a[href^="/users/"]');
+                }
+                
+                if (authorLink) {
+                    // 复用 getArtistInfoFromDOM 的提取逻辑
+                    // 从链接的 data-gtm-value 或 href 中提取 authorId
+                    authorId = authorLink.getAttribute("data-gtm-value") || authorLink.getAttribute("data-gtm-user-id");
+                    if (!authorId && authorLink.href) {
+                        const hrefMatch = authorLink.href.match(/\d+/);
+                        authorId = hrefMatch ? hrefMatch[0] : null;
+                    }
+                    
+                    // 从链接的 textContent 提取作者名（复用 getArtistInfoFromDOM 逻辑）
+                    authorName = authorLink.textContent?.trim() || "";
+                    
+                    // 如果 textContent 为空，尝试从链接内的 div 提取（兼容新结构）
+                    if (!authorName || authorName === "") {
+                        const authorNameDiv = authorLink.querySelector('div');
+                        if (authorNameDiv) {
+                            authorName = authorNameDiv.innerText?.trim() || authorNameDiv.textContent?.trim() || "";
+                        }
+                    }
+                    
+                    // 如果仍然为空，查找页面上其他包含相同用户ID的链接（可能作者名在其他链接中）
+                    if ((!authorName || authorName === "") && authorId) {
+                        // 先尝试在特定类名的链接中查找：<a class="sc-76df3bd1-6 hQXkzZ">
+                        const specificLink = document.querySelector(`a.sc-76df3bd1-6.hQXkzZ[href*="/users/${authorId}"], a.sc-76df3bd1-6.hQXkzZ[data-gtm-value="${authorId}"], a.sc-76df3bd1-6.hQXkzZ[data-gtm-user-id="${authorId}"]`);
+                        if (specificLink) {
+                            const linkText = specificLink.textContent?.trim() || specificLink.innerText?.trim() || "";
+                            // 检查是否包含有效的作者名（不是常见的操作文本）
+                            if (linkText && linkText.length > 0 && !linkText.includes('查看') && !linkText.includes('作品') && !linkText.includes('目录') && !specificLink.querySelector('figure')) {
+                                authorName = linkText;
+                            }
+                        }
+                        
+                        // 如果特定类名链接中没找到，查找所有包含相同用户ID的链接
+                        if (!authorName || authorName === "") {
+                            const allUserLinks = document.querySelectorAll(`a[href*="/users/${authorId}"], a[data-gtm-value="${authorId}"], a[data-gtm-user-id="${authorId}"]`);
+                            for (const link of allUserLinks) {
+                                const linkText = link.textContent?.trim() || link.innerText?.trim() || "";
+                                // 跳过只包含头像、空文本或常见操作文本的链接
+                                const isInvalidText = !linkText || linkText.length === 0 || 
+                                    link.querySelector('figure') ||
+                                    linkText.includes('查看') || 
+                                    linkText.includes('作品') || 
+                                    linkText.includes('目录') ||
+                                    linkText.includes('关注') ||
+                                    linkText.includes('粉丝');
+                                if (!isInvalidText) {
+                                    authorName = linkText;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 如果主选择器找不到，尝试备用方法（复用 getArtistInfoFromDOM 的逻辑）
+            if (!authorLink) {
+                // 尝试直接查找 a[href^="/users/"] 链接
+                const fallbackLink = document.querySelector('a[href^="/users/"][data-gtm-value], a[href^="/users/"][data-gtm-user-id]');
+                if (fallbackLink) {
+                    authorLink = fallbackLink;
+                    authorId = fallbackLink.getAttribute("data-gtm-value") || fallbackLink.getAttribute("data-gtm-user-id");
+                    if (!authorId && fallbackLink.href) {
+                        const hrefMatch = fallbackLink.href.match(/\d+/);
+                        authorId = hrefMatch ? hrefMatch[0] : null;
+                    }
+                    authorName = fallbackLink.textContent?.trim() || "";
+                    
+                    // 如果备用链接的textContent也为空，查找页面上其他包含相同用户ID的链接
+                    if ((!authorName || authorName === "") && authorId) {
+                        // 先尝试在特定类名的链接中查找：<a class="sc-76df3bd1-6 hQXkzZ">
+                        const specificLink = document.querySelector(`a.sc-76df3bd1-6.hQXkzZ[href*="/users/${authorId}"], a.sc-76df3bd1-6.hQXkzZ[data-gtm-value="${authorId}"], a.sc-76df3bd1-6.hQXkzZ[data-gtm-user-id="${authorId}"]`);
+                        if (specificLink) {
+                            const linkText = specificLink.textContent?.trim() || specificLink.innerText?.trim() || "";
+                            // 检查是否包含有效的作者名（不是常见的操作文本）
+                            if (linkText && linkText.length > 0 && !linkText.includes('查看') && !linkText.includes('作品') && !linkText.includes('目录') && !specificLink.querySelector('figure')) {
+                                authorName = linkText;
+                            }
+                        }
+                        
+                        // 如果特定类名链接中没找到，查找所有包含相同用户ID的链接
+                        if (!authorName || authorName === "") {
+                            const allUserLinks = document.querySelectorAll(`a[href*="/users/${authorId}"], a[data-gtm-value="${authorId}"], a[data-gtm-user-id="${authorId}"]`);
+                            for (const link of allUserLinks) {
+                                const linkText = link.textContent?.trim() || link.innerText?.trim() || "";
+                                // 跳过只包含头像、空文本或常见操作文本的链接
+                                const isInvalidText = !linkText || linkText.length === 0 || 
+                                    link.querySelector('figure') ||
+                                    linkText.includes('查看') || 
+                                    linkText.includes('作品') || 
+                                    linkText.includes('目录') ||
+                                    linkText.includes('关注') ||
+                                    linkText.includes('粉丝');
+                                if (!isInvalidText) {
+                                    authorName = linkText;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // 如果仍然没有找到，使用默认值
+            if (!authorName || authorName === "") {
+                authorName = "Unknown";
+            }
+            
+            if (getDebugMode()) {
+                if (authorName && authorName !== "Unknown") {
+                    console.log("[Pixiv2Eagle] 提取到作者名:", authorName, "作者UID:", authorId);
+                } else {
+                    console.log("[Pixiv2Eagle] 未提取到作者名，使用默认值:", authorName);
+                }
+            }
 
             // 系列信息
             const seriesSection = document.querySelector(NOVEL_SERIES_SECTION_SELECTOR);
@@ -3902,12 +4189,35 @@ p {
             let seriesTitle = null;
             
             if (seriesSection) {
+                // 优先从 h2.sc-edf844cc-2.emSEGV 获取系列标题
+                const seriesTitleElement = document.querySelector(NOVEL_SERIES_TITLE_SELECTOR);
+                if (seriesTitleElement) {
+                    let rawSeriesTitle = seriesTitleElement.textContent.trim();
+                    // 去除"系列"前缀，获取原始系列名称
+                    if (rawSeriesTitle.startsWith('系列')) {
+                        seriesTitle = rawSeriesTitle.substring(2).trim();
+                    } else {
+                        seriesTitle = rawSeriesTitle;
+                    }
+                }
+                
+                // 从系列链接获取系列ID（如果还没有获取到系列标题，也从链接中提取）
                 const seriesLink = document.querySelector(NOVEL_SERIES_LINK_SELECTOR);
                 if (seriesLink) {
                     const match = seriesLink.getAttribute("href").match(/\/novel\/series\/(\d+)/);
                     if (match) {
                         seriesId = match[1];
-                        seriesTitle = seriesLink.textContent.trim();
+                        // 如果还没有从h2元素获取到系列标题，则从链接中提取
+                        if (!seriesTitle) {
+                            // 从页面提取原始文本，然后去除"系列"前缀以获取原始系列名称
+                            let rawSeriesTitle = seriesLink.textContent.trim();
+                            // 去除"系列"前缀，获取原始系列名称
+                            if (rawSeriesTitle.startsWith('系列')) {
+                                seriesTitle = rawSeriesTitle.substring(2).trim();
+                            } else {
+                                seriesTitle = rawSeriesTitle;
+                            }
+                        }
                     }
                 }
             }
@@ -3989,6 +4299,42 @@ p {
             } else {
             }
 
+            // 提取标签
+            const tagsContainer = document.querySelector(NOVEL_TAGS_CONTAINER_SELECTOR);
+            const tags = [];
+            if (tagsContainer) {
+                const tagItems = tagsContainer.querySelectorAll(NOVEL_TAG_ITEM_SELECTOR);
+                for (const tagItem of tagItems) {
+                    const tagText = tagItem.textContent?.trim();
+                    if (tagText) {
+                        tags.push(tagText);
+                    }
+                }
+                if (getDebugMode()) {
+                    console.log("[Pixiv2Eagle] 提取到小说标签:", tags);
+                }
+            } else {
+                if (getDebugMode()) {
+                    console.log("[Pixiv2Eagle] 未找到标签容器");
+                }
+            }
+
+            // 提取出版日期
+            let publishDate = null;
+            const dateContainer = document.querySelector(NOVEL_PUBLISH_DATE_CONTAINER_SELECTOR);
+            if (dateContainer) {
+                const timeEl = dateContainer.querySelector('time');
+                if (timeEl) {
+                    const datetime = timeEl.getAttribute('datetime');
+                    if (datetime) {
+                        publishDate = datetime;
+                        if (getDebugMode()) {
+                            console.log("[Pixiv2Eagle] 提取到出版日期:", publishDate);
+                        }
+                    }
+                }
+            }
+
             return {
                 id: novelId,
                 title,
@@ -4001,6 +4347,8 @@ p {
                 content,
                 images,
                 hasImages,
+                tags,
+                publishDate,
                 illustType: "novel"
             };
         } catch (error) {
@@ -4040,7 +4388,7 @@ p {
             name: `${safeTitle}.${novelExt}`,
             website: novelUrl,
             annotation: details.id,
-            tags: [],
+            tags: details.tags || [],
             folderId: chapterFolderId
         });
         
@@ -4056,7 +4404,7 @@ p {
                         name: imageInfo.filename,
                         website: novelUrl,
                         annotation: details.id,
-                        tags: [],
+                        tags: details.tags || [],
                         folderId: chapterFolderId
                     });
                 }
@@ -4147,9 +4495,15 @@ p {
                 }
                 
                 if (!seriesFolderId) {
-                    seriesFolderId = await createEagleFolder(details.seriesTitle, targetParentId, seriesUrl);
+                    // 使用与EPUB相同的逻辑：先去除可能存在的"系列"前缀，然后添加"系列:"前缀
+                    let cleanSeriesTitle = details.seriesTitle;
+                    if (cleanSeriesTitle.startsWith('系列')) {
+                        cleanSeriesTitle = cleanSeriesTitle.substring(2).trim();
+                    }
+                    const seriesFolderName = `系列:${cleanSeriesTitle}`;
+                    seriesFolderId = await createEagleFolder(seriesFolderName, targetParentId, seriesUrl);
                     if (parentFolderObj && parentFolderObj.children) {
-                        const newSeriesObj = { id: seriesFolderId, name: details.seriesTitle, description: seriesUrl, children: [] };
+                        const newSeriesObj = { id: seriesFolderId, name: seriesFolderName, description: seriesUrl, children: [] };
                         parentFolderObj.children.push(newSeriesObj);
                         parentFolderObj = newSeriesObj;
                     }
@@ -4251,6 +4605,10 @@ p {
                         
                         // 使用 addFromPath 添加 EPUB 文件
                         const novelUrl = `https://www.pixiv.net/novel/show.php?id=${details.id}`;
+                        const epubTags = details.tags || [];
+                        if (getDebugMode()) {
+                            console.log("[Pixiv2Eagle] 保存 EPUB 文件，标签:", epubTags);
+                        }
                         const addResult = await gmFetch("http://localhost:41595/api/item/addFromPath", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
@@ -4259,7 +4617,7 @@ p {
                                 name: epubFilename,
                                 website: novelUrl,
                         annotation: details.id,
-                        tags: [],
+                        tags: epubTags,
                         folderId: chapterFolderId
                     })
                 });
@@ -4429,8 +4787,11 @@ p {
         const seriesId = seriesIdMatch ? seriesIdMatch[1] : null;
         if (!seriesId) return;
         
-        const authorLink = document.querySelector(NOVEL_SERIES_AUTHOR_LINK_SELECTOR);
-        const authorId = authorLink ? authorLink.getAttribute("data-gtm-user-id") : null;
+        // 容器本身就是 a 标签，直接从中获取作者UID
+        const authorContainer = document.querySelector(NOVEL_AUTHOR_CONTAINER_SELECTOR);
+        if (!authorContainer) return;
+        
+        const authorId = authorContainer.getAttribute("data-gtm-value") || authorContainer.getAttribute("data-gtm-user-id");
         if (!authorId) return;
         
         const pixivFolderId = getFolderId();
