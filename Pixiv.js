@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.2.3.12
+// @version         2.2.3.31
 
 // @author          nekoday,juzijun233
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -76,17 +76,19 @@ SOFTWARE.
     const THUMBNAIL_CONTAINER_PARTIAL_SELECTOR = 'div.sc-f44a0b30-9'; // 列表作品缩略图容器 (部分匹配)
     
     // DOM Selectors - Novel
-    const NOVEL_TITLE_SELECTOR = 'h1.sc-41178ccf-3.irrkHK'; // 小说标题
+    const NOVEL_TITLE_SELECTOR = 'h1.sc-57130d55-3.bwpTuX'; // 小说标题
     const NOVEL_DESC_SELECTOR = 'div.sc-fcc502d1-0.jNYFaO > p.sc-fcc502d1-1.YOSSS'; // 小说简介
     const NOVEL_SERIES_DESC_SELECTOR = 'div.sc-fcc502d1-0.jNYFaO > p.sc-fcc502d1-1.fDflWh'; // 小说系列简介
     const NOVEL_COVER_SELECTOR = 'img.sc-41178ccf-19.cKuUeg'; // 小说封面图片
-    const NOVEL_SERIES_COVER_SELECTOR = 'img.sc-11435b73-2.hnPyQB'; // 小说系列封面图片
+    const NOVEL_SERIES_COVER_SELECTOR = 'img.sc-5aaa84d4-19.jFTOdN'; // 小说系列封面图片
     const NOVEL_AUTHOR_CONTAINER_SELECTOR = 'a.sc-bypJrT.bUiITy'; // 小说作者信息容器（a标签，包含作者UID和作者名）
-    const NOVEL_CONTENT_SELECTOR = 'div.sc-ejfMa-d.fldORf'; // 小说正文内容容器
+    const NOVEL_CONTENT_SELECTOR = 'div.sc-ejfMa-d.eXXQXn'; // 小说正文内容容器
+    const NOVEL_TEXT_SPAN_SELECTOR = 'span.text-count'; // 小说正文段落 (每一段信息包含在 <span class="text-count"> 中，data-textcount 值随内容增长)
     const NOVEL_SERIES_SECTION_SELECTOR = 'section.sc-55920ee2-1'; // 小说所属系列区域 (用于判断是否属于系列)
     const NOVEL_SERIES_LINK_SELECTOR = 'a.sc-13d2e2cd-0.gwOqfd[href^="/novel/series/"]'; // 小说系列链接
     const NOVEL_SERIES_TITLE_SELECTOR = 'h2.sc-edf844cc-2.emSEGV'; // 小说系列标题
-    const NOVEL_SAVE_BUTTON_SECTION_SELECTOR = 'section.sc-44936c9d-0.bmSdAW'; // 小说保存按钮插入位置
+    const NOVEL_CHAPTER_NUMBER_LINK_SELECTOR = 'a.sc-41178ccf-15.kKNiSw[href^="/novel/series/"]'; // 小说章节序号链接（包含系列名称和序号）
+    const NOVEL_SAVE_BUTTON_SECTION_SELECTOR = 'section.sc-cc664bf6-0.gGTiHy'; // 小说保存按钮插入位置
     const NOVEL_CHAPTER_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列章节列表容器
     const NOVEL_SERIES_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列列表容器 (别名，与 NOVEL_CHAPTER_LIST_SELECTOR 相同)
     const NOVEL_CHAPTER_LINK_SELECTOR = 'a[data-gtm-value]'; // 小说章节链接 (用于提取 novelId)
@@ -103,6 +105,186 @@ SOFTWARE.
     const MANGA_SERIES_HEADER_SELECTOR = 'div.sc-e4a4c914-0.Hwtke'; // 漫画系列页面头部 (用于插入更新按钮)
     const ARTWORK_BUTTON_CONTAINER_SELECTOR = 'div.sc-7fd477ff-3.jrRrCf'; // 作品详情页按钮容器
     const ARTWORK_BUTTON_REF_SELECTOR = 'div.sc-7fd477ff-4.duoqQE'; // 作品详情页按钮插入参考点
+
+    // ========== 特征识别函数 ==========
+    
+    /**
+     * 基于特征识别查找小说标签容器（使用备用方案）
+     * 策略组合：
+     * 1. 使用旧选择器（优先）
+     * 2. 在main中寻找footer，找到后再在其中寻找ul表格
+     * @returns {HTMLElement|null} 小说标签容器元素（footer）
+     */
+    function findNovelTagsContainer() {
+        // 策略1: 尝试当前精确选择器
+        let tagsContainer = document.querySelector(NOVEL_TAGS_CONTAINER_SELECTOR);
+        if (tagsContainer) {
+            if (getDebugMode()) {
+                console.log("[Pixiv2Eagle] 标签容器查找: 使用精确选择器");
+            }
+            return tagsContainer;
+        }
+
+        // 策略2: 在main中寻找footer，找到后检查其中是否有ul
+        const mainEl = document.querySelector('main');
+        if (mainEl) {
+            const footerEl = mainEl.querySelector('footer');
+            if (footerEl) {
+                // 检查footer中是否有ul表格
+                const ulEl = footerEl.querySelector('ul');
+                if (ulEl) {
+                    if (getDebugMode()) {
+                        console.log("[Pixiv2Eagle] 标签容器查找: 使用main>footer>ul结构");
+                    }
+                    return footerEl;
+                }
+            }
+        }
+
+        if (getDebugMode()) {
+            console.log("[Pixiv2Eagle] 标签容器查找: 未找到合适的元素");
+        }
+        return null;
+    }
+
+    /**
+     * 基于特征识别查找小说标题元素（方法9：特征识别而非选择器）
+     * 策略组合：
+     * 1. 使用旧选择器（优先）
+     * 2. 部分class匹配
+     * 3. 基于DOM结构（在main标签内查找第一个h1）
+     * 4. 基于视觉特征（找最大字号的h1）
+     * @returns {HTMLElement|null} 小说标题元素
+     */
+    function findNovelTitle() {
+        // 策略1: 尝试当前精确选择器
+        let titleEl = document.querySelector(NOVEL_TITLE_SELECTOR);
+        if (titleEl) {
+            if (getDebugMode()) {
+                console.log("[Pixiv2Eagle] 标题查找: 使用精确选择器");
+            }
+            return titleEl;
+        }
+
+        // 策略2: 部分class匹配（去掉最后一个class，保留哈希前缀）
+        titleEl = document.querySelector('h1[class*="sc-57130d55"]');
+        if (titleEl) {
+            if (getDebugMode()) {
+                console.log("[Pixiv2Eagle] 标题查找: 使用部分class匹配");
+            }
+            return titleEl;
+        }
+
+        // 策略3: 基于DOM结构 - main标签内的第一个h1
+        const mainEl = document.querySelector('main');
+        if (mainEl) {
+            titleEl = mainEl.querySelector('h1');
+            if (titleEl) {
+                if (getDebugMode()) {
+                    console.log("[Pixiv2Eagle] 标题查找: 使用main>h1结构");
+                }
+                return titleEl;
+            }
+        }
+
+        // 策略4: 基于视觉特征 - 找最大字号的h1（排除固定导航栏）
+        const allH1s = document.querySelectorAll('h1');
+        if (allH1s.length > 0) {
+            let maxFontSize = 0;
+            let bestCandidate = null;
+
+            allH1s.forEach(h1 => {
+                // 排除不可见元素
+                const style = window.getComputedStyle(h1);
+                if (style.display === 'none' || style.visibility === 'hidden') {
+                    return;
+                }
+
+                // 排除导航栏中的元素
+                const rect = h1.getBoundingClientRect();
+                if (rect.top < 0 || rect.top > window.innerHeight) {
+                    return; // 不在可视区域
+                }
+
+                const fontSize = parseFloat(style.fontSize);
+                if (fontSize > maxFontSize) {
+                    maxFontSize = fontSize;
+                    bestCandidate = h1;
+                }
+            });
+
+            if (bestCandidate) {
+                if (getDebugMode()) {
+                    console.log("[Pixiv2Eagle] 标题查找: 使用字号特征识别");
+                }
+                return bestCandidate;
+            }
+        }
+
+        // 策略5: 最后尝试 - 任意h1
+        titleEl = document.querySelector('h1');
+        if (titleEl) {
+            if (getDebugMode()) {
+                console.log("[Pixiv2Eagle] 标题查找: 使用通用h1回退");
+            }
+            return titleEl;
+        }
+
+        console.warn("[Pixiv2Eagle] 无法找到小说标题元素");
+        return null;
+    }
+
+    /**
+     * 基于特征识别查找小说封面（使用备用方案）
+     * 策略组合：
+     * 1. 使用精确选择器（优先）
+     * 2. 使用部分class匹配
+     * 3. 在main容器中寻找第一个img标签
+     * @returns {HTMLImageElement|null} 小说封面图片元素
+     */
+    function findNovelCover() {
+        // 策略1: 尝试当前精确选择器
+        let coverImg = document.querySelector(NOVEL_COVER_SELECTOR);
+        if (coverImg) {
+            if (getDebugMode()) {
+                console.log("[Pixiv2Eagle] 封面查找: 使用精确选择器");
+            }
+            return coverImg;
+        }
+
+        // 策略2: 部分class匹配（去掉最后一个class，保留哈希前缀）
+        coverImg = document.querySelector('img[class*="sc-41178ccf"]');
+        if (coverImg) {
+            if (getDebugMode()) {
+                console.log("[Pixiv2Eagle] 封面查找: 使用部分class匹配");
+            }
+            return coverImg;
+        }
+
+        // 策略3: 基于DOM结构 - main标签内的第一个img
+        const mainEl = document.querySelector('main');
+        if (mainEl) {
+            coverImg = mainEl.querySelector('img');
+            if (coverImg) {
+                if (getDebugMode()) {
+                    console.log("[Pixiv2Eagle] 封面查找: 使用main>img结构");
+                }
+                return coverImg;
+            }
+        }
+
+        // 策略4: 最后尝试 - 任意img
+        coverImg = document.querySelector('img');
+        if (coverImg) {
+            if (getDebugMode()) {
+                console.log("[Pixiv2Eagle] 封面查找: 使用通用img回退");
+            }
+            return coverImg;
+        }
+
+        console.warn("[Pixiv2Eagle] 无法找到小说封面元素");
+        return null;
+    }
 
     // 获取文件夹 ID
     function getFolderId() {
@@ -518,6 +700,7 @@ SOFTWARE.
 
     // 封装 GM_xmlhttpRequest 为 Promise
     function gmFetch(url, options = {}) {
+        const timeout = options.timeout || 15000;
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
                 method: options.method || "GET",
@@ -525,11 +708,20 @@ SOFTWARE.
                 headers: options.headers || {},
                 data: options.body,
                 responseType: "json",
+                timeout,
                 onload: function (response) {
+                    const status = typeof response.status === "number" ? response.status : 200;
+                    if (status >= 400) {
+                        reject(new Error(`HTTP ${status} when requesting ${url}`));
+                        return;
+                    }
                     resolve(response.response);
                 },
                 onerror: function (error) {
                     reject(error);
+                },
+                ontimeout: function () {
+                    reject(new Error(`Request timed out after ${timeout}ms: ${url}`));
                 },
             });
         });
@@ -537,6 +729,7 @@ SOFTWARE.
 
     // 封装 GM_xmlhttpRequest 获取二进制数据（ArrayBuffer/Blob）
     function gmFetchBinary(url, options = {}) {
+        const timeout = options.timeout || 20000;
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
                 method: options.method || "GET",
@@ -544,11 +737,20 @@ SOFTWARE.
                 headers: options.headers || {},
                 data: options.body,
                 responseType: options.responseType || "arraybuffer",
+                timeout,
                 onload: function (response) {
+                    const status = typeof response.status === "number" ? response.status : 200;
+                    if (status >= 400) {
+                        reject(new Error(`HTTP ${status} when requesting ${url}`));
+                        return;
+                    }
                     resolve(response.response);
                 },
                 onerror: function (error) {
                     reject(error);
+                },
+                ontimeout: function () {
+                    reject(new Error(`Request timed out after ${timeout}ms: ${url}`));
                 },
             });
         });
@@ -1259,8 +1461,10 @@ SOFTWARE.
     // 获取作品页面信息
     async function getArtworkPages(artworkId) {
         try {
-            const response = await fetch(`https://www.pixiv.net/ajax/illust/${artworkId}/pages?lang=zh`);
-            const data = await response.json();
+            const data = await gmFetch(`https://www.pixiv.net/ajax/illust/${artworkId}/pages?lang=zh`, {
+                headers: { referer: "https://www.pixiv.net/" },
+                timeout: 10000
+            });
 
             if (!data.body || !Array.isArray(data.body)) {
                 throw new Error("无法获取作品页面信息");
@@ -1280,7 +1484,10 @@ SOFTWARE.
     async function getArtworkDetails(artworkId) {
         try {
             const [basicInfo, pagesInfo] = await Promise.all([
-                fetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`).then((r) => r.json()),
+                gmFetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`, {
+                    headers: { referer: "https://www.pixiv.net/" },
+                    timeout: 10000
+                }),
                 getArtworkPages(artworkId),
             ]);
 
@@ -1351,7 +1558,9 @@ SOFTWARE.
                             // 简单验证是否包含数字
                             if (/\d/.test(chapterNum)) {
                                 details.illustTitle = `#${chapterNum} ${details.illustTitle}`;
-                                console.log(`[Pixiv2Eagle] 已优化漫画标题: ${details.illustTitle}`);
+                                if (getDebugMode()) {
+                                    console.log(`[Pixiv2Eagle] 已优化漫画标题: ${details.illustTitle}`);
+                                }
                             }
                         }
                     }
@@ -1370,8 +1579,10 @@ SOFTWARE.
     // 获取动图（ugoira）元数据
     async function getUgoiraMeta(artworkId) {
         try {
-            const response = await fetch(`https://www.pixiv.net/ajax/illust/${artworkId}/ugoira_meta?lang=zh`);
-            const data = await response.json();
+            const data = await gmFetch(`https://www.pixiv.net/ajax/illust/${artworkId}/ugoira_meta?lang=zh`, {
+                headers: { referer: "https://www.pixiv.net/" },
+                timeout: 10000
+            });
             if (!data || !data.body || !data.body.originalSrc || !Array.isArray(data.body.frames)) {
                 throw new Error("无法获取动图元数据");
             }
@@ -1387,6 +1598,7 @@ SOFTWARE.
 
     // 以文本形式获取内容
     function gmFetchText(url, options = {}) {
+        const timeout = options.timeout || 15000;
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
                 method: options.method || "GET",
@@ -1394,11 +1606,15 @@ SOFTWARE.
                 headers: options.headers || {},
                 data: options.body,
                 responseType: "text",
+                timeout,
                 onload: function (response) {
                     resolve(response.responseText || response.response);
                 },
                 onerror: function (error) {
                     reject(error);
+                },
+                ontimeout: function () {
+                    reject(new Error(`Request timed out after ${timeout}ms: ${url}`));
                 },
             });
         });
@@ -1896,7 +2112,10 @@ SOFTWARE.
 
     // 从 artwork 信息获取画师信息
     async function getArtistInfoFromArtwork(artworkId) {
-        const artworkInfo = await fetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`).then((r) => r.json());
+        const artworkInfo = await gmFetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`, {
+            headers: { referer: "https://www.pixiv.net/" },
+            timeout: 10000
+        });
         if (artworkInfo && artworkInfo.body) {
             return {
                 userId: artworkInfo.body.userId,
@@ -2984,6 +3203,7 @@ SOFTWARE.
 
     // 异步构建 Eagle 索引 (单例模式)
     async function ensureEagleIndex(forceRefresh = false) {
+        const debug = getDebugMode();
         
         // 如果强制刷新，清除缓存
         if (forceRefresh) {
@@ -3006,14 +3226,20 @@ SOFTWARE.
                         // 索引未过期，反序列化并返回
                         const index = deserializeIndex(cachedData.index);
                         window.__pixiv2eagle_globalEagleIndex = index;
-                        console.log(`[Pixiv2Eagle] 从缓存加载 Eagle 索引，包含 ${index.size} 位画师`);
+                        if (debug) {
+                            console.log(`[Pixiv2Eagle] 从缓存加载 Eagle 索引，包含 ${index.size} 位画师`);
+                        }
                         return index;
                     } else {
                         // 索引已过期或文件夹ID不匹配，清除缓存
                         if (now >= cachedData.expireTime) {
-                            console.log("[Pixiv2Eagle] 索引已过期，重新构建...");
+                            if (debug) {
+                                console.log("[Pixiv2Eagle] 索引已过期，重新构建...");
+                            }
                         } else {
-                            console.log("[Pixiv2Eagle] 文件夹ID不匹配，重新构建索引...");
+                            if (debug) {
+                                console.log("[Pixiv2Eagle] 文件夹ID不匹配，重新构建索引...");
+                            }
                         }
                         invalidateEagleIndex();
                     }
@@ -3024,7 +3250,9 @@ SOFTWARE.
             }
         }
 
-        console.log("[Pixiv2Eagle] 正在构建全局 Eagle 索引...");
+        if (debug) {
+            console.log("[Pixiv2Eagle] 正在构建全局 Eagle 索引...");
+        }
         window.__pixiv2eagle_eagleIndexLoadingPromise = (async () => {
             const index = new Map();
             if (!pixivFolderId) return index;
@@ -3074,7 +3302,9 @@ SOFTWARE.
                             }
                         }
                     }
-                    console.log(`[Pixiv2Eagle] 全局 Eagle 索引构建完成，包含 ${index.size} 位画师`);
+                    if (debug) {
+                        console.log(`[Pixiv2Eagle] 全局 Eagle 索引构建完成，包含 ${index.size} 位画师`);
+                    }
                     
                     // 持久化索引到存储
                     try {
@@ -3085,7 +3315,9 @@ SOFTWARE.
                             expireTime: expireTime,
                             pixivFolderId: pixivFolderId
                         });
-                        console.log(`[Pixiv2Eagle] 索引已保存，将在 ${new Date(expireTime).toLocaleString()} 过期`);
+                        if (debug) {
+                            console.log(`[Pixiv2Eagle] 索引已保存，将在 ${new Date(expireTime).toLocaleString()} 过期`);
+                        }
                     } catch (e) {
                         console.warn("[Pixiv2Eagle] 保存索引失败:", e);
                     }
@@ -3107,6 +3339,7 @@ SOFTWARE.
 
     // 在推荐区域标记已保存作品
     async function markSavedInRecommendationArea() {
+        const debug = getDebugMode();
         // 如果正在初始化，直接返回，避免重复执行
         if (isRecAreaInitializing) return;
         
@@ -3138,7 +3371,9 @@ SOFTWARE.
                 window.recPendingTimer = null;
             }
 
-            console.log("[Pixiv2Eagle] 开始监控推荐区域 (全局索引版)...");
+            if (debug) {
+                console.log("[Pixiv2Eagle] 开始监控推荐区域 (全局索引版)...");
+            }
 
             // 立即触发索引构建，但不阻塞后续的 Observer 设置
             ensureEagleIndex();
@@ -3373,14 +3608,13 @@ SOFTWARE.
         if (!contentContainer) {
             return {
                 content: details.content,
-                format: 'txt',
+                format: 'md',
                 images: []
             };
         }
         
         // 构建 Markdown 内容，保持文本和图片的原始顺序
         let markdownContent = "";
-        const allElements = Array.from(contentContainer.children);
         
         // 创建图片 URL 到索引的映射
         const imageUrlToIndex = new Map();
@@ -3390,59 +3624,36 @@ SOFTWARE.
         
         let imageIndex = 0;
         
-        // 遍历所有子元素，保持顺序
-        for (const element of allElements) {
-            // 检查元素中是否包含图片
-            const imagesInElement = Array.from(element.querySelectorAll("img"));
-            
-            if (imagesInElement.length > 0) {
-                // 如果元素包含图片，需要分别处理文本和图片
-                const textNodes = Array.from(element.childNodes).filter(
-                    node => node.nodeType === Node.TEXT_NODE || (node.nodeType === Node.ELEMENT_NODE && node.tagName !== "IMG")
-                );
-                
-                // 添加文本内容
-                for (const textNode of textNodes) {
-                    if (textNode.nodeType === Node.TEXT_NODE) {
-                        const text = textNode.textContent.trim();
-                        if (text) {
-                            markdownContent += text + "\n\n";
-                        }
-                    } else if (textNode.tagName === "P") {
-                        const text = textNode.textContent.trim();
-                        if (text) {
-                            markdownContent += text + "\n\n";
-                        }
-                    }
-                }
-                
-                // 添加图片引用
-                for (const img of imagesInElement) {
-                    const src = img.src || img.getAttribute("data-src") || "";
-                    const alt = img.alt || img.getAttribute("alt") || "";
-                    
-                    if (src && imageUrlToIndex.has(src)) {
-                        const idx = imageUrlToIndex.get(src);
-                        const urlMatch = src.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i);
-                        const ext = urlMatch ? urlMatch[1].toLowerCase() : "jpg";
-                        const filename = `image_${idx}.${ext}`;
-                        
-                        markdownContent += `![${alt}](${filename})\n\n`;
-                        imageIndex++;
-                    }
-                }
-            } else if (element.tagName === "P") {
-                // 普通段落
-                const text = element.textContent.trim();
+        // 遍历内容容器的所有子节点（包括文本节点和元素节点），使用新的 span.text-count 和 <br> 结构
+        const childNodes = Array.from(contentContainer.childNodes);
+        let currentParagraph = ""; // 累积当前段落的文本
+        
+        for (const node of childNodes) {
+            if (node.nodeType === Node.ELEMENT_NODE && node.matches(NOVEL_TEXT_SPAN_SELECTOR)) {
+                // 处理 span.text-count 元素
+                const text = node.textContent.trim();
                 if (text) {
-                    markdownContent += text + "\n\n";
+                    currentParagraph += text;
                 }
-            } else if (element.tagName === "IMG") {
-                // 单独的图片元素
-                const src = element.src || element.getAttribute("data-src") || "";
-                const alt = element.alt || element.getAttribute("alt") || "";
+            } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') {
+                // 遇到 <br> 标签，结束当前段落
+                if (currentParagraph.trim()) {
+                    markdownContent += currentParagraph.trim() + "\n\n";
+                    currentParagraph = "";
+                }
+            } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'IMG') {
+                // 处理图片元素
+                const src = node.src || node.getAttribute("data-src") || "";
+                const alt = node.alt || node.getAttribute("alt") || "";
                 
                 if (src && imageUrlToIndex.has(src)) {
+                    // 先输出当前段落（如果有）
+                    if (currentParagraph.trim()) {
+                        markdownContent += currentParagraph.trim() + "\n\n";
+                        currentParagraph = "";
+                    }
+                    
+                    // 添加图片引用
                     const idx = imageUrlToIndex.get(src);
                     const urlMatch = src.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i);
                     const ext = urlMatch ? urlMatch[1].toLowerCase() : "jpg";
@@ -3451,11 +3662,39 @@ SOFTWARE.
                     markdownContent += `![${alt}](${filename})\n\n`;
                     imageIndex++;
                 }
-            } else if (element.textContent.trim()) {
-                // 其他包含文本的元素
-                const text = element.textContent.trim();
-                markdownContent += text + "\n\n";
+            } else if (node.nodeType === Node.ELEMENT_NODE) {
+                // 处理其他元素（如包含图片的容器）
+                const imagesInElement = Array.from(node.querySelectorAll("img"));
+                
+                if (imagesInElement.length > 0) {
+                    // 先输出当前段落（如果有）
+                    if (currentParagraph.trim()) {
+                        markdownContent += currentParagraph.trim() + "\n\n";
+                        currentParagraph = "";
+                    }
+                    
+                    // 处理容器中的图片
+                    for (const img of imagesInElement) {
+                        const src = img.src || img.getAttribute("data-src") || "";
+                        const alt = img.alt || img.getAttribute("alt") || "";
+                        
+                        if (src && imageUrlToIndex.has(src)) {
+                            const idx = imageUrlToIndex.get(src);
+                            const urlMatch = src.match(/\.(jpg|jpeg|png|gif|webp|bmp)(\?|$)/i);
+                            const ext = urlMatch ? urlMatch[1].toLowerCase() : "jpg";
+                            const filename = `image_${idx}.${ext}`;
+                            
+                            markdownContent += `![${alt}](${filename})\n\n`;
+                            imageIndex++;
+                        }
+                    }
+                }
             }
+        }
+        
+        // 处理最后一个段落（如果没有遇到 <br> 就结束了）
+        if (currentParagraph.trim()) {
+            markdownContent += currentParagraph.trim() + "\n\n";
         }
         
         // 如果没有成功构建 Markdown，回退到纯文本
@@ -4034,16 +4273,16 @@ p {
     // 获取小说详细信息
     async function getNovelDetails(novelId) {
         try {
-            // 标题
-            const titleEl = document.querySelector(NOVEL_TITLE_SELECTOR);
+            // 标题 - 使用特征识别
+            const titleEl = findNovelTitle();
             const title = titleEl ? titleEl.textContent.trim() : `Novel_${novelId}`;
 
             // 简介
             const descEl = document.querySelector(NOVEL_DESC_SELECTOR);
             const description = descEl ? descEl.textContent.trim() : "";
 
-            // 封面
-            const coverImg = document.querySelector(NOVEL_COVER_SELECTOR);
+            // 封面 - 使用特征识别
+            const coverImg = findNovelCover();
             const coverUrl = coverImg ? coverImg.src : null;
 
             // 作者 - 复用 getArtistInfoFromDOM 的逻辑提取作者信息
@@ -4187,6 +4426,7 @@ p {
             const seriesSection = document.querySelector(NOVEL_SERIES_SECTION_SELECTOR);
             let seriesId = null;
             let seriesTitle = null;
+            let chapterNumber = null; // 章节序号（格式：#1, #2, #3...）
             
             if (seriesSection) {
                 // 优先从 h2.sc-edf844cc-2.emSEGV 获取系列标题
@@ -4198,6 +4438,17 @@ p {
                         seriesTitle = rawSeriesTitle.substring(2).trim();
                     } else {
                         seriesTitle = rawSeriesTitle;
+                    }
+                }
+                
+                // 从章节序号链接提取序号：<a class="sc-41178ccf-15 kKNiSw">系列名称 #序号</a>
+                const chapterNumberLink = document.querySelector(NOVEL_CHAPTER_NUMBER_LINK_SELECTOR);
+                if (chapterNumberLink) {
+                    const linkText = chapterNumberLink.textContent.trim();
+                    // 提取序号：查找 # 后的数字
+                    const numberMatch = linkText.match(/#(\d+)/);
+                    if (numberMatch) {
+                        chapterNumber = `#${numberMatch[1]}`;
                     }
                 }
                 
@@ -4282,28 +4533,63 @@ p {
                     });
                 }
                 
-                // 提取文本内容（忽略开头空白div，提取后续p标签）
-                const allElements = Array.from(contentContainer.children);
-                let startIndex = 0;
-                // 跳过开头的空白div
-                for (let i = 0; i < allElements.length; i++) {
-                    const el = allElements[i];
-                    if (el.tagName === "P" || el.textContent.trim()) {
-                        startIndex = i;
-                        break;
-                    }
-                }
+                // 提取文本内容（优先使用 span.text-count 结构，每段后遇到 <br> 时插入换行）
+                const textSpans = contentContainer.querySelectorAll(NOVEL_TEXT_SPAN_SELECTOR);
                 
-                const paragraphs = Array.from(contentContainer.querySelectorAll("p"));
-                content = paragraphs.map(p => p.textContent).join("\n");
+                if (textSpans.length > 0) {
+                    // 新结构：使用 span.text-count 提取内容
+                    const contentParts = [];
+                    
+                    // 直接遍历所有找到的 textSpans
+                    for (let i = 0; i < textSpans.length; i++) {
+                        const span = textSpans[i];
+                        const text = span.textContent.trim();
+                        if (text) {
+                            contentParts.push(text);
+                        }
+                        
+                        // 检查当前 span 之后是否有 <br> 标签（作为段落分隔符）
+                        // 查找下一个兄弟节点
+                        let nextSibling = span.nextSibling;
+                        while (nextSibling) {
+                            if (nextSibling.nodeType === Node.ELEMENT_NODE) {
+                                if (nextSibling.tagName === 'BR') {
+                                    // 找到 BR 标签，添加两个换行符以形成段落分隔
+                                    contentParts.push('\n\n');
+                                    break;
+                                } else if (nextSibling.matches && nextSibling.matches(NOVEL_TEXT_SPAN_SELECTOR)) {
+                                    // 找到下一个 span，不需要换行
+                                    break;
+                                }
+                            }
+                            nextSibling = nextSibling.nextSibling;
+                        }
+                    }
+                    
+                    content = contentParts.join('');
+                } else {
+                    // 备用方案：使用旧的 <p> 标签提取逻辑
+                    const paragraphs = Array.from(contentContainer.querySelectorAll("p"));
+                    content = paragraphs.map(p => p.textContent).join("\n");
+                }
             } else {
             }
 
             // 提取标签
-            const tagsContainer = document.querySelector(NOVEL_TAGS_CONTAINER_SELECTOR);
+            const tagsContainer = findNovelTagsContainer();
             const tags = [];
             if (tagsContainer) {
-                const tagItems = tagsContainer.querySelectorAll(NOVEL_TAG_ITEM_SELECTOR);
+                // 先尝试使用精确选择器
+                let tagItems = tagsContainer.querySelectorAll(NOVEL_TAG_ITEM_SELECTOR);
+                
+                // 如果精确选择器找不到，使用通用的 ul li 选择器
+                if (tagItems.length === 0) {
+                    tagItems = tagsContainer.querySelectorAll('ul li');
+                    if (getDebugMode()) {
+                        console.log("[Pixiv2Eagle] 标签项提取: 使用通用的ul li选择器");
+                    }
+                }
+                
                 for (const tagItem of tagItems) {
                     const tagText = tagItem.textContent?.trim();
                     if (tagText) {
@@ -4344,6 +4630,7 @@ p {
                 authorName,
                 seriesId,
                 seriesTitle,
+                chapterNumber, // 章节序号（格式：#1, #2, #3...）
                 content,
                 images,
                 hasImages,
@@ -4363,9 +4650,15 @@ p {
             combinedContent = combineNovelContent(details);
         }
         
+        // 生成文件名（添加序号前缀）
+        let titleWithNumber = details.title;
+        if (details.chapterNumber) {
+            titleWithNumber = `${details.chapterNumber} ${details.title}`;
+        }
+        
         // 下载文件到本地
         showMessage("正在下载小说文件，请选择保存位置...", false);
-        const downloadedFiles = await downloadNovelFiles(combinedContent, details.title, details.id);
+        const downloadedFiles = await downloadNovelFiles(combinedContent, titleWithNumber, details.id);
         
         // 等待用户下载完成
         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -4376,7 +4669,7 @@ p {
         
         // 使用 addFromPath 批量添加文件（小说文件 + 图片文件）
         const novelExt = combinedContent.format === 'md' ? 'md' : 'txt';
-        const safeTitle = details.title.replace(/[\\/:*?"<>|]/g, "_");
+        const safeTitle = titleWithNumber.replace(/[\\/:*?"<>|]/g, "_");
         const novelUrl = `https://www.pixiv.net/novel/show.php?id=${details.id}`;
         
         // 构建 items 数组
@@ -4511,8 +4804,12 @@ p {
                 targetParentId = seriesFolderId;
             }
 
-            // 4. 创建小说章节文件夹
-            const chapterFolderId = await createEagleFolder(details.title, targetParentId, details.id);
+            // 4. 创建小说章节文件夹（添加序号前缀）
+            let folderName = details.title;
+            if (details.chapterNumber) {
+                folderName = `${details.chapterNumber} ${details.title}`;
+            }
+            const chapterFolderId = await createEagleFolder(folderName, targetParentId, details.id);
 
             // 5. 保存内容
             // 5.1 封面
@@ -4573,8 +4870,12 @@ p {
                             throw genError;
                         }
                         
-                        // 下载 EPUB 文件到本地
-                const safeTitle = details.title.replace(/[\\/:*?"<>|]/g, "_");
+                        // 下载 EPUB 文件到本地（添加序号前缀）
+                        let titleWithNumber = details.title;
+                        if (details.chapterNumber) {
+                            titleWithNumber = `${details.chapterNumber} ${details.title}`;
+                        }
+                        const safeTitle = titleWithNumber.replace(/[\\/:*?"<>|]/g, "_");
                         const epubFilename = `${safeTitle}.epub`;
                         downloadFile(epubBlob, epubFilename);
                         
@@ -4746,15 +5047,102 @@ p {
     }
 
     // 添加小说页面的保存按钮
+    let addNovelButtonLock = false; // 执行锁，防止并发调用
     async function addNovelButton() {
+        // 检查执行锁
+        if (addNovelButtonLock) {
+            return;
+        }
+        
         const oldWrapper = document.getElementById(EAGLE_SAVE_BUTTON_ID);
-        if (oldWrapper) return;
+        if (oldWrapper) {
+            return;
+        }
+        
+        // 获取锁
+        addNovelButtonLock = true;
 
-        const targetSection = await waitForElement(NOVEL_SAVE_BUTTON_SECTION_SELECTOR);
-        if (!targetSection) return;
+        // 尝试多个选择器定位保存按钮插入位置
+        let targetSection = await waitForElement(NOVEL_SAVE_BUTTON_SECTION_SELECTOR, 3000);
+        
+        // 如果主选择器失败，尝试备用方案：通过标题元素向上查找合适的容器
+        if (!targetSection) {
+            if (getDebugMode()) {
+                console.log("[Pixiv2Eagle] 主选择器失败，尝试备用方案...");
+            }
+            
+            // 方案1: 尝试找到标题元素，然后找到它的父容器中的合适位置（使用特征识别）
+            const titleElement = findNovelTitle();
+            if (titleElement) {
+                // 遍历父元素，找到包含标题的主要内容区域
+                let parent = titleElement.parentElement;
+                let attempts = 0;
+                while (parent && attempts < 10) {
+                    // 查找同级的 section 元素
+                    const sections = parent.querySelectorAll('section');
+                    for (const section of sections) {
+                        // 寻找包含按钮或操作区域的 section
+                        if (section.querySelector('button') || section.querySelector('a[role="button"]')) {
+                            targetSection = section;
+                            if (getDebugMode()) {
+                                console.log("[Pixiv2Eagle] 通过标题定位到目标区域:", section.className);
+                            }
+                            break;
+                        }
+                    }
+                    if (targetSection) break;
+                    parent = parent.parentElement;
+                    attempts++;
+                }
+            }
+            
+            // 方案2: 如果还是找不到，尝试通过标签容器向上查找
+            if (!targetSection) {
+                const tagsContainer = findNovelTagsContainer();
+                if (tagsContainer) {
+                    // 在标签容器的前面插入
+                    targetSection = tagsContainer.parentElement;
+                    if (getDebugMode()) {
+                        console.log("[Pixiv2Eagle] 通过标签容器定位到目标区域");
+                    }
+                }
+            }
+            
+            // 方案3: 通过作者信息容器定位
+            if (!targetSection) {
+                const authorContainer = document.querySelector(NOVEL_AUTHOR_CONTAINER_SELECTOR);
+                if (authorContainer) {
+                    let parent = authorContainer.parentElement;
+                    let attempts = 0;
+                    while (parent && attempts < 10) {
+                        if (parent.tagName === 'SECTION') {
+                            targetSection = parent;
+                            if (getDebugMode()) {
+                                console.log("[Pixiv2Eagle] 通过作者信息定位到目标区域");
+                            }
+                            break;
+                        }
+                        parent = parent.parentElement;
+                        attempts++;
+                    }
+                }
+            }
+        }
+        
+        if (!targetSection) {
+            if (getDebugMode()) {
+                console.error("[Pixiv2Eagle] 无法找到小说保存按钮插入位置，请检查页面结构");
+            }
+            addNovelButtonLock = false; // 释放锁
+            return;
+        }
 
         // 双重检查，防止在等待过程中重复创建
-        if (document.getElementById(EAGLE_SAVE_BUTTON_ID)) return;
+        const doubleCheckButton = document.getElementById(EAGLE_SAVE_BUTTON_ID);
+        if (doubleCheckButton) {
+            addNovelButtonLock = false; // 释放锁
+            return;
+        }
 
         const buttonWrapper = document.createElement("div");
         buttonWrapper.id = EAGLE_SAVE_BUTTON_ID;
@@ -4776,6 +5164,9 @@ p {
         if (getAutoCheckSavedStatus()) {
             updateNovelSaveButtonIfSaved(saveButton);
         }
+        
+        // 释放锁
+        addNovelButtonLock = false;
     }
 
     // 在小说系列页面标记已保存章节
