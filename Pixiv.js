@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.2.2
+// @version         2.3.0
 
 // @author          nekoday
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -110,6 +110,18 @@ SOFTWARE.
         alert(`使用投稿时间作为添加日期已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
     }
 
+    // 获取是否严格排序保存
+    function getStrictSaveOrder() {
+        return GM_getValue("strictSaveOrder", false);
+    }
+
+    // 切换是否严格排序保存
+    function toggleStrictSaveOrder() {
+        const currentMode = getStrictSaveOrder();
+        GM_setValue("strictSaveOrder", !currentMode);
+        alert(`严格排序保存已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
+    }
+
     // 获取是否保存作品描述
     function getSaveDescription() {
         return GM_getValue("saveDescription", true); // 默认开启
@@ -182,7 +194,7 @@ SOFTWARE.
     function setArtistMatcher() {
         const template = prompt(
             "请输入画师文件夹匹配模板，$uid 为画师 ID，$name 为画师名称。\n默认值：$name",
-            GM_getValue("folderNameTemplate", "$name")
+            GM_getValue("folderNameTemplate", "$name"),
         );
         if (template === null) return;
         GM_setValue("folderNameTemplate", template);
@@ -197,6 +209,7 @@ SOFTWARE.
     // 注册菜单命令
     GM_registerMenuCommand("📁 设置 Pixiv 文件夹 ID", setFolderId);
     GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", toggleUseUploadDate);
+    GM_registerMenuCommand("🔢 切换：按照严格排序保存", toggleStrictSaveOrder);
     GM_registerMenuCommand("🕗 切换：保存作品描述", toggleSaveDescription);
     GM_registerMenuCommand("🗂️ 切换：为多页作品创建子文件夹", toggleCreateSubFolder);
     GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
@@ -376,8 +389,8 @@ SOFTWARE.
                 const items = Array.isArray(data.data)
                     ? data.data
                     : Array.isArray(data.data?.items)
-                    ? data.data.items
-                    : [];
+                      ? data.data.items
+                      : [];
 
                 const matched = items.find((item) => item.url === artworkUrl);
                 if (matched) {
@@ -599,7 +612,7 @@ SOFTWARE.
         const newSeriesFolderId = await createEagleFolder(
             seriesName,
             artistFolder.id,
-            `https://www.pixiv.net/user/${artistId}/series/${seriesId}`
+            `https://www.pixiv.net/user/${artistId}/series/${seriesId}`,
         );
         return {
             existed: false,
@@ -623,7 +636,7 @@ SOFTWARE.
                 const seriesFolder = findSeriesFolderInArtist(
                     artistFolder,
                     details.userId,
-                    details.seriesNavData.seriesId
+                    details.seriesNavData.seriesId,
                 );
                 if (seriesFolder) {
                     currentFolder = seriesFolder;
@@ -638,7 +651,7 @@ SOFTWARE.
 
             // 再检查子文件夹描述是否等于作品 ID
             const savedChild = (currentFolder.children || []).find(
-                (folder) => (folder.description || "").trim() === String(artworkId)
+                (folder) => (folder.description || "").trim() === String(artworkId),
             );
             if (savedChild) {
                 return { folder: savedChild, itemId: null };
@@ -1085,7 +1098,8 @@ SOFTWARE.
 
         // 根据设置决定是否使用投稿时间
         const useUploadDate = getUseUploadDate();
-        const modificationTime = useUploadDate ? new Date(details.uploadDate).getTime() : undefined;
+        const modificationTime = useUploadDate ? new Date(details.uploadDate).getTime() : Date.now();
+        const strictSaveOrder = getStrictSaveOrder();
 
         // 根据设置决定是否保存描述
         const shouldSaveDescription = getSaveDescription();
@@ -1104,7 +1118,9 @@ SOFTWARE.
                     website: artworkUrl,
                     tags: details.tags,
                     ...(annotation && { annotation }),
-                    ...(modificationTime && { modificationTime }),
+                    ...(modificationTime && {
+                        modificationTime: modificationTime + (strictSaveOrder ? index : 0),
+                    }),
                     ...(!isUgoira && {
                         headers: {
                             referer: "https://www.pixiv.net/",

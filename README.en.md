@@ -15,6 +15,7 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
 - 🗂️ Option to create subfolder for multi-page artwork
 - 📝 Option to save artwork description to Eagle annotation
 - ⏰ Option to use artwork upload time as the addition date
+- 🔢 Optional strict save ordering (preserve original page order via modification time)
 - 🔍 Option to auto-detect whether the current artwork is already saved and open the saved artwork with one click
 - 🔧 Configurable Pixiv folder ID
 - 🐛 Debug mode support
@@ -101,6 +102,13 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
   - Since Eagle sorts by addition date in descending order by default, the display order of artworks will be consistent with the artist's upload order
   - Suitable for users who want to view artworks in the order they were uploaded by the artist
 - Disabled by default, meaning the actual save time is used as the addition date
+
+### Strict Save Order
+- Toggle via the Tampermonkey menu `🔢 切换：按照严格排序保存`
+- When enabled:
+  - The first page keeps its base modification time; each subsequent page adds +1 (millisecond)
+  - The base time follows the Upload Time setting when enabled; otherwise it uses the actual save time
+  - Useful for viewing artworks in the original Pixiv page order within Eagle
 
 ## Precautions
 
