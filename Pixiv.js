@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.4.0
+// @version         2.4.1
 
 // @author          nekoday
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -754,7 +754,7 @@ SOFTWARE.
         button.style.fontSize = "14px";
         button.style.padding = "8px 16px";
         button.style.borderRadius = "999px";
-        button.style.color = "#333";
+        button.style.color = "inherit";
         button.style.backgroundColor = "transparent";
         button.style.display = "flex";
         button.style.alignItems = "center";
@@ -772,7 +772,7 @@ SOFTWARE.
         // 添加鼠标离开效果
         button.addEventListener("mouseleave", () => {
             button.style.backgroundColor = "transparent";
-            button.style.color = "#333";
+            button.style.color = "inherit";
             button.style.border = "1px solid #d6d6d6";
         });
 
