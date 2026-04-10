@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.3.0
+// @version         2.4.0
 
 // @author          nekoday
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -134,6 +134,23 @@ SOFTWARE.
         alert(`保存作品描述已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
     }
 
+    // 获取是否直接保存到 Pixiv 文件夹
+    function getSaveToPixivFolderDirectly() {
+        return GM_getValue("saveToPixivFolderDirectly", false);
+    }
+
+    // 切换是否直接保存到 Pixiv 文件夹
+    function toggleSaveToPixivFolderDirectly() {
+        const currentMode = getSaveToPixivFolderDirectly();
+        GM_setValue("saveToPixivFolderDirectly", !currentMode);
+        alert(
+            !currentMode ? "✅ 已开启：直接保存到 Pixiv 文件夹，不创建画师子文件夹" : "📁 已恢复：按画师创建子文件夹",
+        );
+        if (getArtworkId()) {
+            addButton();
+        }
+    }
+
     // 切换是否为多 P 作品创建子文件夹
     function toggleCreateSubFolder() {
         const currentMode = getCreateSubFolder();
@@ -211,6 +228,7 @@ SOFTWARE.
     GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", toggleUseUploadDate);
     GM_registerMenuCommand("🔢 切换：按照严格排序保存", toggleStrictSaveOrder);
     GM_registerMenuCommand("🕗 切换：保存作品描述", toggleSaveDescription);
+    GM_registerMenuCommand("📂 切换：直接保存到 Pixiv 文件夹", toggleSaveToPixivFolderDirectly);
     GM_registerMenuCommand("🗂️ 切换：为多页作品创建子文件夹", toggleCreateSubFolder);
     GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
     GM_registerMenuCommand("🔎 切换：自动检测作品保存状态", toggleAutoCheckSavedStatus);
@@ -364,8 +382,8 @@ SOFTWARE.
     }
 
     // 查询 Eagle 中是否已保存指定作品
-    async function isArtworkSavedInEagle(artworkId, folderId) {
-        if (!folderId) {
+    async function isArtworkSavedInEagle(artworkId, folderId, searchAll = false) {
+        if (!folderId && !searchAll) {
             return { saved: false, itemId: null };
         }
 
@@ -378,10 +396,12 @@ SOFTWARE.
 
             while (loopCount < 100000) {
                 const params = new URLSearchParams({
-                    folders: folderId,
                     limit: limit.toString(),
                     offset: offset.toString(),
                 });
+                if (folderId) {
+                    params.set("folders", folderId);
+                }
 
                 const data = await gmFetch(`http://localhost:41595/api/item/list?${params.toString()}`);
                 if (!data || !data.status) break;
@@ -411,112 +431,98 @@ SOFTWARE.
         return { saved: false, itemId: null };
     }
 
+    async function getEagleFolderTree() {
+        const data = await gmFetch("http://localhost:41595/api/folder/list");
+        if (!data.status || !Array.isArray(data.data)) {
+            throw new Error("无法获取文件夹列表");
+        }
+        return data.data;
+    }
+
+    function findFolderRecursively(folders, targetId) {
+        for (const folder of folders) {
+            if (folder.id === targetId) {
+                return folder;
+            }
+            if (folder.children && folder.children.length > 0) {
+                const found = findFolderRecursively(folder.children, targetId);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    function normalizeFolderInfo(folder, fallbackName = "未命名文件夹") {
+        return {
+            existed: true,
+            id: folder.id ?? null,
+            name: folder.name || fallbackName,
+            children: Array.isArray(folder.children) ? folder.children : [],
+            description: folder.description || "",
+        };
+    }
+
+    function findArtistFolderInChildren(children, artistId) {
+        const targetArtistId = String(artistId);
+        const artistFolder = (children || []).find((childFolder) => {
+            const description = childFolder.description || "";
+            const match = description.match(/pid\s*=\s*(\d+)/);
+            return match && match[1] === targetArtistId;
+        });
+        return artistFolder ? normalizeFolderInfo(artistFolder) : null;
+    }
+
+    async function getDirectSaveBaseFolder(pixivFolderId) {
+        const folderTree = await getEagleFolderTree();
+
+        if (pixivFolderId) {
+            const pixivFolder = findFolderRecursively(folderTree, pixivFolderId);
+            if (!pixivFolder) {
+                throw new Error("找不到指定的 Pixiv 文件夹，请检查输入的文件夹 ID 是否正确");
+            }
+            return normalizeFolderInfo(pixivFolder);
+        }
+
+        return {
+            existed: true,
+            id: null,
+            name: "根目录",
+            children: folderTree,
+            description: "",
+        };
+    }
+
     // 查找画师文件夹（不创建）
     async function findArtistFolder(pixivFolderId, artistId) {
-        // 递归查找文件夹
-        function findFolderRecursively(folders, targetId) {
-            for (const folder of folders) {
-                if (folder.id === targetId) {
-                    return folder;
-                }
-                if (folder.children && folder.children.length > 0) {
-                    const found = findFolderRecursively(folder.children, targetId);
-                    if (found) {
-                        return found;
-                    }
-                }
-            }
-            return null;
-        }
+        try {
+            const folderTree = await getEagleFolderTree();
 
-        // 在文件夹中查找画师文件夹（通过画师 ID）
-        function findArtistFolderInFolder(folder, artistId) {
-            if (!folder || !folder.children) return null;
-
-            const artistFolder = folder.children.find((childFolder) => {
-                const description = childFolder.description || "";
-                const match = description.match(/pid\s*=\s*(\d+)/);
-                return match && match[1] === artistId;
-            });
-
-            if (artistFolder) {
-                return {
-                    existed: true,
-                    id: artistFolder.id,
-                    name: artistFolder.name,
-                    children: artistFolder.children,
-                };
-            }
-            return null;
-        }
-
-        // 在指定的 Pixiv 文件夹中查找画师文件夹
-        async function findArtistFolderInPixivFolder(pixivFolderId, artistId) {
-            try {
-                // 获取所有文件夹列表
-                const data = await gmFetch("http://localhost:41595/api/folder/list");
-                if (!data.status || !Array.isArray(data.data)) {
-                    throw new Error("无法获取文件夹列表");
-                }
-
-                // 递归查找 Pixiv 主文件夹
-                const pixivFolder = findFolderRecursively(data.data, pixivFolderId);
+            if (pixivFolderId) {
+                const pixivFolder = findFolderRecursively(folderTree, pixivFolderId);
                 if (!pixivFolder) {
                     throw new Error("找不到指定的 Pixiv 文件夹，请检查输入的文件夹 ID 是否正确");
                 }
-
-                // 在 Pixiv 文件夹中查找画师文件夹
-                return findArtistFolderInFolder(pixivFolder, artistId);
-            } catch (error) {
-                console.error("在 Pixiv 文件夹中查找画师文件夹失败:", error);
-                throw error;
+                return findArtistFolderInChildren(pixivFolder.children, artistId);
             }
-        }
 
-        // 在根目录查找画师文件夹
-        async function findArtistFolderInRoot(artistId) {
-            try {
-                const rootFolders = await gmFetch("http://localhost:41595/api/folder/list");
-                if (!rootFolders.status || !Array.isArray(rootFolders.data)) {
-                    throw new Error("无法获取根目录文件夹列表");
-                }
-
-                const existingFolder = rootFolders.data.find((folder) => {
-                    const description = folder.description || "";
-                    const match = description.match(/pid\s*=\s*(\d+)/);
-                    return match && match[1] === artistId;
-                });
-
-                if (existingFolder) {
-                    return {
-                        existed: true,
-                        id: existingFolder.id,
-                        name: existingFolder.name,
-                        children: existingFolder.children,
-                    };
-                }
-                return null;
-            } catch (error) {
-                console.error("在根目录查找画师文件夹失败:", error);
-                throw error;
-            }
-        }
-
-        if (pixivFolderId) {
-            return await findArtistFolderInPixivFolder(pixivFolderId, artistId);
-        } else {
-            return await findArtistFolderInRoot(artistId);
+            return findArtistFolderInChildren(folderTree, artistId);
+        } catch (error) {
+            console.error("查找画师文件夹失败:", error);
+            throw error;
         }
     }
 
-    // 在画师文件夹中查找指定系列文件夹（不创建）
-    function findSeriesFolderInArtist(artistFolder, artistId, seriesId) {
-        if (!artistFolder || !artistFolder.children) return null;
-        return artistFolder.children.find((folder) => {
+    // 在指定目录下查找系列文件夹（不创建）
+    function findSeriesFolderInParent(parentFolder, artistId, seriesId) {
+        if (!parentFolder || !parentFolder.children) return null;
+        const seriesFolder = parentFolder.children.find((folder) => {
             const description = folder.description || "";
             const match = description.match(/^https?:\/\/www\.pixiv\.net\/user\/(\d+)\/series\/(\d+)\/?$/);
             return match && match[1] === String(artistId) && match[2] === String(seriesId);
         });
+        return seriesFolder ? normalizeFolderInfo(seriesFolder) : null;
     }
 
     // 创建 Eagle 文件夹
@@ -574,7 +580,7 @@ SOFTWARE.
             return {
                 existed: false,
                 id: newFolderId,
-                name: artistName,
+                name: folderName,
                 children: [],
             };
         } catch (error) {
@@ -592,26 +598,28 @@ SOFTWARE.
         return await createArtistFolder(artistName, artistId, pixivFolderId);
     }
 
-    // 查找系列文件夹
-    async function getSeriesFolder(artistFolder, artistId, seriesId, seriesName) {
-        const existingFolder = artistFolder.children.find((folder) => {
-            const description = folder.description || "";
-            const match = description.match(/^https?:\/\/www\.pixiv\.net\/user\/(\d+)\/series\/(\d+)\/?$/);
-            return match && match[1] === artistId && match[2] === seriesId;
-        });
-
-        if (existingFolder) {
-            return {
-                existed: true,
-                id: existingFolder.id,
-                name: existingFolder.name,
-                children: existingFolder.children,
-            };
+    async function getSaveBaseFolder(pixivFolderId, artistId, artistName) {
+        if (getSaveToPixivFolderDirectly()) {
+            return await getDirectSaveBaseFolder(pixivFolderId);
         }
+        return await getArtistFolder(pixivFolderId, artistId, artistName);
+    }
+
+    async function getExistingSaveBaseFolder(pixivFolderId, artistId) {
+        if (getSaveToPixivFolderDirectly()) {
+            return await getDirectSaveBaseFolder(pixivFolderId);
+        }
+        return await findArtistFolder(pixivFolderId, artistId);
+    }
+
+    // 查找系列文件夹
+    async function getSeriesFolder(parentFolder, artistId, seriesId, seriesName) {
+        const existingFolder = findSeriesFolderInParent(parentFolder, artistId, seriesId);
+        if (existingFolder) return existingFolder;
 
         const newSeriesFolderId = await createEagleFolder(
             seriesName,
-            artistFolder.id,
+            parentFolder.id,
             `https://www.pixiv.net/user/${artistId}/series/${seriesId}`,
         );
         return {
@@ -627,14 +635,14 @@ SOFTWARE.
         try {
             const details = await getArtworkDetails(artworkId);
             const pixivFolderId = getFolderId();
-            const artistFolder = await findArtistFolder(pixivFolderId, details.userId);
-            if (!artistFolder) return null;
+            const baseFolder = await getExistingSaveBaseFolder(pixivFolderId, details.userId);
+            if (!baseFolder) return null;
 
-            // 默认在画师文件夹检查，如有系列则进入系列文件夹
-            let currentFolder = artistFolder;
+            // 默认在基础目录检查，如有系列则进入系列文件夹
+            let currentFolder = baseFolder;
             if (details.seriesNavData) {
-                const seriesFolder = findSeriesFolderInArtist(
-                    artistFolder,
+                const seriesFolder = findSeriesFolderInParent(
+                    baseFolder,
                     details.userId,
                     details.seriesNavData.seriesId,
                 );
@@ -644,7 +652,8 @@ SOFTWARE.
             }
 
             // 先检查当前文件夹中的作品
-            const savedResult = await isArtworkSavedInEagle(artworkId, currentFolder.id);
+            const allowGlobalLookup = !currentFolder.id && getSaveToPixivFolderDirectly() && !pixivFolderId;
+            const savedResult = await isArtworkSavedInEagle(artworkId, currentFolder.id, allowGlobalLookup);
             if (savedResult.saved) {
                 return { folder: currentFolder, itemId: savedResult.itemId || null };
             }
@@ -1127,7 +1136,7 @@ SOFTWARE.
                         },
                     }),
                 })),
-                folderId,
+                ...(folderId && { folderId }),
             }),
         });
 
@@ -1136,6 +1145,20 @@ SOFTWARE.
         }
 
         return data.data;
+    }
+
+    function shouldCreateArtworkSubFolder(details) {
+        const createSubFolderMode = getCreateSubFolder();
+        return (
+            details.illustType === 1 ||
+            (createSubFolderMode === "multi-page" && details.pageCount > 1) ||
+            createSubFolderMode === "always"
+        );
+    }
+
+    function formatFolderLabel(folder) {
+        if (!folder) return "未知目录";
+        return folder.id ? `${folder.name} (ID: ${folder.id})` : `${folder.name} (根目录)`;
     }
 
     // 保存当前作品到 Eagle
@@ -1158,36 +1181,49 @@ SOFTWARE.
 
         try {
             const details = await getArtworkDetails(artworkId);
+            const directSaveMode = getSaveToPixivFolderDirectly();
 
-            // 检查或创建画师专属文件夹
-            const artistFolder = await getArtistFolder(folderId, details.userId, details.userName);
-            let targetFolderId = artistFolder.id;
+            // 获取保存基准目录
+            const baseFolder = await getSaveBaseFolder(folderId, details.userId, details.userName);
+            let targetFolder = baseFolder;
 
             // 创建漫画系列文件夹
             if (details.illustType === 1 && details.seriesNavData) {
                 const seriesId = details.seriesNavData.seriesId;
                 const seriesTitle = details.seriesNavData.title;
-                const seriesFolder = await getSeriesFolder(artistFolder, details.userId, seriesId, seriesTitle);
-                targetFolderId = seriesFolder.id;
+                targetFolder = await getSeriesFolder(baseFolder, details.userId, seriesId, seriesTitle);
             }
 
             // 漫画作品，始终创建子文件夹
             // 如果是多 P 作品且设置了创建子文件夹，则创建子文件夹
-            if (
-                details.illustType === 1 ||
-                (getCreateSubFolder() === "multi-page" && details.pageCount > 1) ||
-                getCreateSubFolder() === "always"
-            ) {
-                targetFolderId = await createEagleFolder(details.illustTitle, targetFolderId, artworkId);
+            if (shouldCreateArtworkSubFolder(details)) {
+                const artworkFolderId = await createEagleFolder(
+                    details.illustTitle,
+                    targetFolder.id,
+                    String(artworkId),
+                );
+                targetFolder = {
+                    existed: false,
+                    id: artworkFolderId,
+                    name: details.illustTitle,
+                    children: [],
+                    description: String(artworkId),
+                };
             }
 
-            await saveToEagle(details.originalUrls, targetFolderId, details, artworkId);
+            await saveToEagle(details.originalUrls, targetFolder.id, details, artworkId);
+
+            const targetFolderInfo =
+                targetFolder.id !== baseFolder.id || targetFolder.name !== baseFolder.name
+                    ? [`最终保存位置: ${formatFolderLabel(targetFolder)}`]
+                    : [];
 
             const message = [
                 `✅ ${details.illustType === 2 ? "动图已转换为 GIF 并" : "图片已成功"}保存到 Eagle`,
                 "----------------------------",
                 folderInfo,
-                `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`,
+                `${directSaveMode ? "保存基准目录" : "画师专属文件夹"}: ${formatFolderLabel(baseFolder)}`,
+                ...targetFolderInfo,
                 "----------------------------",
                 `Eagle版本: ${eagleStatus.version}`,
                 "----------------------------",
@@ -1226,18 +1262,6 @@ SOFTWARE.
         return null;
     }
 
-    // 从 artwork 信息获取画师信息
-    async function getArtistInfoFromArtwork(artworkId) {
-        const artworkInfo = await fetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`).then((r) => r.json());
-        if (artworkInfo && artworkInfo.body) {
-            return {
-                userId: artworkInfo.body.userId,
-                userName: artworkInfo.body.userName,
-            };
-        }
-        return null;
-    }
-
     // 更新 Eagle 文件夹名称
     async function updateFolderNameInEagle(folderId, newName) {
         await gmFetch("http://localhost:41595/api/folder/update", {
@@ -1249,34 +1273,49 @@ SOFTWARE.
         });
     }
 
-    // 在 Eagle 中打开画师专属文件夹
-    async function openArtistFolderInEagle(artistInfo) {
+    // 在 Eagle 中打开当前作品的保存目录
+    async function openTargetFolderInEagle(details) {
         const folderId = getFolderId();
+        const directSaveMode = getSaveToPixivFolderDirectly();
 
-        // 只查找，不自动创建
-        const artistFolder = await findArtistFolder(folderId, artistInfo.userId);
-
-        if (!artistFolder) {
-            showMessage(`无法找到画师文件夹，请先保存作品。`, true);
+        const baseFolder = await getExistingSaveBaseFolder(folderId, details.userId);
+        if (!baseFolder) {
+            showMessage("无法找到画师文件夹，请先保存作品。", true);
             return;
         }
 
-        // 打开画师文件夹
-        const eagleUrl = `http://localhost:41595/folder?id=${artistFolder.id}`;
+        let folderToOpen = baseFolder;
+        if (directSaveMode && details.seriesNavData) {
+            const seriesFolder = findSeriesFolderInParent(baseFolder, details.userId, details.seriesNavData.seriesId);
+            if (seriesFolder) {
+                folderToOpen = seriesFolder;
+            }
+        }
+
+        if (!folderToOpen.id) {
+            showMessage("当前为直接保存模式且未设置 Pixiv 文件夹 ID，暂不支持直接打开 Eagle 根目录。", true);
+            return;
+        }
+
+        const eagleUrl = `http://localhost:41595/folder?id=${folderToOpen.id}`;
         window.location.href = eagleUrl;
+
+        if (directSaveMode) {
+            return;
+        }
 
         // 计算正确的文件夹名称
         const artistMatcher = getArtistMatcher();
-        const targetFolderName = artistMatcher.generate(artistInfo.userId, artistInfo.userName);
+        const targetFolderName = artistMatcher.generate(details.userId, details.userName);
 
         // 更新 Eagle 文件夹名称
-        if (artistFolder.name !== targetFolderName) {
-            updateFolderNameInEagle(artistFolder.id, targetFolderName);
+        if (baseFolder.name !== targetFolderName) {
+            updateFolderNameInEagle(baseFolder.id, targetFolderName);
         }
     }
 
-    // 从作品页打开画师专属文件夹
-    async function openArtistFolderFromArtworkPage() {
+    // 从作品页打开保存目录
+    async function openTargetFolderFromArtworkPage() {
         // 首先检查 Eagle 是否运行
         const eagleStatus = await checkEagle();
         if (!eagleStatus.running) {
@@ -1284,19 +1323,18 @@ SOFTWARE.
             return;
         }
 
-        // 通过 DOM 获取画师信息
         const artworkId = getArtworkId();
-        const artistInfo = await getArtistInfoFromArtwork(artworkId);
-        if (!artistInfo) {
-            showMessage("无法获取画师信息", true);
+        if (!artworkId) {
+            showMessage("无法获取作品 ID", true);
             return;
         }
 
         try {
-            await openArtistFolderInEagle(artistInfo);
+            const details = await getArtworkDetails(artworkId);
+            await openTargetFolderInEagle(details);
         } catch (error) {
             console.error(error);
-            showMessage(`打开画师文件夹失败: ${error.message}`, true);
+            showMessage(`打开保存目录失败: ${error.message}`, true);
         }
     }
 
@@ -1443,10 +1481,15 @@ SOFTWARE.
         saveButton.addEventListener("click", saveCurrentArtwork);
 
         // 创建打开文件夹按钮
-        const openFolderButton = createPixivStyledButton("打开画师文件夹");
+        const openFolderButton = createPixivStyledButton(
+            getSaveToPixivFolderDirectly() ? "打开保存目录" : "打开画师文件夹",
+        );
+        openFolderButton.title = getSaveToPixivFolderDirectly()
+            ? "在 Eagle 中打开当前作品的保存目录"
+            : "在 Eagle 中打开当前画师文件夹";
 
         // 添加打开文件夹按钮点击事件
-        openFolderButton.addEventListener("click", openArtistFolderFromArtworkPage);
+        openFolderButton.addEventListener("click", openTargetFolderFromArtworkPage);
 
         // 将按钮添加到包裹 div 中
         buttonWrapper.appendChild(openFolderButton);
