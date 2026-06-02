@@ -3,7 +3,7 @@
 // @name:en         Pixiv2Eagle
 // @description     一键将 Pixiv 艺术作品保存到 Eagle 图片管理软件，支持多页作品、自动创建画师文件夹、保留标签和元数据
 // @description:en  Save Pixiv artworks to Eagle image management software with one click. Supports multi-page artworks, automatic artist folder creation, and preserves tags and metadata
-// @version         2.4.2
+// @version         2.5.0-a
 
 // @author          nekoday
 // @namespace       https://github.com/nekoday/Pixiv2Eagle
@@ -53,6 +53,7 @@ SOFTWARE.
     // 常量定义
     const EAGLE_SAVE_BUTTON_ID = "eagle-save-button-wrapper";
     const EAGLE_OPEN_ITEM_BUTTON_ID = "eagle-open-artwork-button";
+    const EAGLE_USER_FOLDER_BUTTON_ID = "eagle-user-folder-button";
     const PIXIV_SECTION_CLASS = "sc-7709e4d9-0"; // deprecated
     const PIXIV_ARTIST_DIV_CLASS = "sc-946c1cc3-1 lnPJtB"; // deprecated
 
@@ -147,7 +148,7 @@ SOFTWARE.
             !currentMode ? "✅ 已开启：直接保存到 Pixiv 文件夹，不创建画师子文件夹" : "📁 已恢复：按画师创建子文件夹",
         );
         if (getArtworkId()) {
-            addButton();
+            addArtworkPageButton();
         }
     }
 
@@ -677,7 +678,7 @@ SOFTWARE.
     function observeUrlChanges(monitorConfig) {
         const handler = () => {
             for (const monitorInfo of monitorConfig) {
-                if (location.pathname.includes(monitorInfo.urlSuffix)) {
+                if (monitorInfo.match()) {
                     handlePageChange(monitorInfo);
                 }
             }
@@ -705,11 +706,18 @@ SOFTWARE.
 
     // 处理页面变化
     function handlePageChange(monitorInfo) {
+        if (!monitorInfo.match()) return;
+
         // 立即尝试执行处理函数（添加页面元素）
         monitorInfo.handler();
 
         // 设置一个观察器来监视 DOM 变化
         const observer = new MutationObserver((mutations, obs) => {
+            if (!monitorInfo.match()) {
+                obs.disconnect();
+                return;
+            }
+
             // 检查是否存在指定 ID 的元素，若不存在则添加
             const button = document.getElementById(monitorInfo.observeID);
             if (!button) {
@@ -733,6 +741,11 @@ SOFTWARE.
         // 同时设置一个间隔检查
         let checkCount = 0;
         const intervalId = setInterval(() => {
+            if (!monitorInfo.match()) {
+                clearInterval(intervalId);
+                return;
+            }
+
             const button = document.getElementById(monitorInfo.observeID);
             if (!button) {
                 monitorInfo.handler();
@@ -814,6 +827,50 @@ SOFTWARE.
     function getArtworkId() {
         const match = location.pathname.match(/^\/artworks\/(\d+)/);
         return match ? match[1] : null;
+    }
+
+    // 获取用户 ID
+    function getUserId() {
+        const match = location.pathname.match(/^\/users\/(\d+)(?:\/|$)/);
+        return match ? match[1] : null;
+    }
+
+    async function getUserDetails(userId) {
+        const response = await fetch(`https://www.pixiv.net/ajax/user/${userId}`);
+        const data = await response.json();
+        return {
+            userId: String(userId),
+            userName: data.body.name,
+        };
+    }
+
+    function findUserFollowButton() {
+        function isVisibleElement(element) {
+            if (!element) return false;
+            const rect = element.getBoundingClientRect();
+            const style = window.getComputedStyle(element);
+            return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        }
+
+        const followTextPattern =
+            /^(加关注|关注中|已关注|フォロー|フォロー中|フォローする|Follow|Following|Followed)$/i;
+        const searchRoot = document.querySelector("main") || document.body;
+        const candidates = Array.from(searchRoot.querySelectorAll('button, a[role="button"], div[role="button"]'));
+
+        const followButtons = candidates.filter((element) => {
+            if (!isVisibleElement(element)) return false;
+
+            const text = (element.textContent || "").replace(/\s+/g, "").trim();
+            const ariaLabel = (element.getAttribute("aria-label") || "").replace(/\s+/g, "").trim();
+            return followTextPattern.test(text) || followTextPattern.test(ariaLabel);
+        });
+
+        const headerButton = followButtons.find((element) => {
+            const rect = element.getBoundingClientRect();
+            return rect.top >= 0 && rect.top < window.innerHeight;
+        });
+
+        return headerButton || followButtons[0];
     }
 
     // 处理标签
@@ -1324,6 +1381,10 @@ SOFTWARE.
             return;
         }
 
+        if (!details.userName) {
+            return;
+        }
+
         // 计算正确的文件夹名称
         const artistMatcher = getArtistMatcher();
         const targetFolderName = artistMatcher.generate(details.userId, details.userName);
@@ -1355,6 +1416,29 @@ SOFTWARE.
         } catch (error) {
             console.error(error);
             showMessage(`打开保存目录失败: ${error.message}`, true);
+        }
+    }
+
+    // 从用户页打开对应的 Eagle 文件夹
+    async function openTargetFolderFromUserPage() {
+        const eagleStatus = await checkEagle();
+        if (!eagleStatus.running) {
+            showMessage("Eagle 未启动，请先启动 Eagle 应用！", true);
+            return;
+        }
+
+        const userId = getUserId();
+        if (!userId) {
+            showMessage("无法获取用户 ID", true);
+            return;
+        }
+
+        try {
+            const details = await getUserDetails(userId);
+            await openTargetFolderInEagle(details);
+        } catch (error) {
+            console.error(error);
+            showMessage(`打开用户文件夹失败: ${error.message}`, true);
         }
     }
 
@@ -1460,7 +1544,7 @@ SOFTWARE.
     }
 
     // 主函数
-    async function addButton() {
+    async function addArtworkPageButton() {
         // 移除旧按钮（如果存在）
         const oldWrapper = document.getElementById(EAGLE_SAVE_BUTTON_ID);
         if (oldWrapper) {
@@ -1522,18 +1606,42 @@ SOFTWARE.
         if (getAutoCheckSavedStatus()) updateSaveButtonIfSaved(saveButton);
     }
 
+    function addUserPageButton() {
+        if (!getUserId()) return;
+
+        if (document.getElementById(EAGLE_USER_FOLDER_BUTTON_ID)) return;
+
+        const followButton = findUserFollowButton();
+        if (!followButton || !followButton.parentElement) return;
+
+        const folderButton = createPixivStyledButton("📁");
+        folderButton.id = EAGLE_USER_FOLDER_BUTTON_ID;
+        folderButton.title = getSaveToPixivFolderDirectly()
+            ? "在 Eagle 中打开当前保存基准目录"
+            : "在 Eagle 中打开当前画师文件夹";
+        folderButton.setAttribute("aria-label", folderButton.title);
+        folderButton.addEventListener("click", openTargetFolderFromUserPage);
+
+        followButton.parentElement.insertBefore(folderButton, followButton);
+    }
+
     const monitorConfig = [
         {
-            urlSuffix: "/artworks",
+            match: () => Boolean(getArtworkId()),
             observeID: EAGLE_SAVE_BUTTON_ID,
-            handler: addButton,
+            handler: addArtworkPageButton,
+        },
+        {
+            match: () => Boolean(getUserId()),
+            observeID: EAGLE_USER_FOLDER_BUTTON_ID,
+            handler: addUserPageButton,
         },
     ];
 
     // 启动脚本
     try {
         for (const monitorInfo of monitorConfig) {
-            if (location.pathname.includes(monitorInfo.urlSuffix)) {
+            if (monitorInfo.match()) {
                 handlePageChange(monitorInfo);
             }
         }
