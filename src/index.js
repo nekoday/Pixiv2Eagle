@@ -293,26 +293,22 @@
         return GM_getValue("useUploadDate", false);
     }
 
-    // 切换是否使用投稿时间
-    function toggleUseUploadDate() {
-        const currentMode = getUseUploadDate();
-        GM_setValue("useUploadDate", !currentMode);
-        alert(`使用投稿时间作为添加日期已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
-    }
-
     // 获取是否保存作品描述
     function getSaveDescription() {
         return GM_getValue("saveDescription", true); // 默认开启
     }
 
-    // 切换是否保存作品描述
-    function toggleSaveDescription() {
-        const currentMode = getSaveDescription();
-        GM_setValue("saveDescription", !currentMode);
-        alert(`保存作品描述已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
+    // 设置 toggle 工厂：生成布尔型开关函数（P1 阶段仍用 alert，P2 替换为 toast）
+    // 保留各 toggle 原有的 alert 文案与默认值（spec 要求用户可见行为不变）
+    function makeToggle({ key, label, defaultValue = false, onText = "开启 ✅", offText = "关闭 ❌" }) {
+        return function () {
+            const current = GM_getValue(key, defaultValue);
+            GM_setValue(key, !current);
+            alert(`${label}已${!current ? onText : offText}`);
+        };
     }
 
-    // 切换是否为多 P 作品创建子文件夹
+    // 切换是否为多 P 作品创建子文件夹（三态：off / multi-page / always，不套工厂）
     function toggleCreateSubFolder() {
         const currentMode = getCreateSubFolder();
         switch (currentMode) {
@@ -349,35 +345,14 @@
         return GM_getValue("saveByType", false);
     }
 
-    // 切换按类型保存
-    function toggleSaveByType() {
-        const currentMode = getSaveByType();
-        GM_setValue("saveByType", !currentMode);
-        alert(`按类型保存已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
-    }
-
     // 获取调试模式状态
     function getDebugMode() {
         return GM_getValue("debugMode", false);
     }
 
-    // 切换调试模式
-    function toggleDebugMode() {
-        const currentMode = getDebugMode();
-        GM_setValue("debugMode", !currentMode);
-        alert(`调试模式已${!currentMode ? "开启 ✅" : "关闭 ❌"}`);
-    }
-
     // 获取是否自动检测作品保存状态
     function getAutoCheckSavedStatus() {
         return GM_getValue("autoCheckSavedStatus", false);
-    }
-
-    // 切换自动检测作品保存状态
-    function toggleAutoCheckSavedStatus() {
-        const currentStatus = getAutoCheckSavedStatus();
-        GM_setValue("autoCheckSavedStatus", !currentStatus);
-        alert(`自动检测作品保存状态已${!currentStatus ? "开启" : "关闭"}`);
     }
 
     // 设置画师文件夹匹配模板串
@@ -410,16 +385,16 @@
     }
 
     GM_registerMenuCommand("📁 设置 Pixiv 文件夹 ID", setFolderId);
-    GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", toggleUseUploadDate);
-    GM_registerMenuCommand("🕗 切换：保存作品描述", toggleSaveDescription);
+    GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", makeToggle({ key: "useUploadDate", label: "使用投稿时间作为添加日期" }));
+    GM_registerMenuCommand("🕗 切换：保存作品描述", makeToggle({ key: "saveDescription", label: "保存作品描述", defaultValue: true }));
     GM_registerMenuCommand("🗂️ 切换：为多页作品创建子文件夹", toggleCreateSubFolder);
-    GM_registerMenuCommand("🗂️ 切换：按类型保存", toggleSaveByType);
+    GM_registerMenuCommand("🗂️ 切换：按类型保存", makeToggle({ key: "saveByType", label: "按类型保存" }));
     GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
-    GM_registerMenuCommand("🔎 切换：自动检测作品保存状态", toggleAutoCheckSavedStatus);
+    GM_registerMenuCommand("🔎 切换：自动检测作品保存状态", makeToggle({ key: "autoCheckSavedStatus", label: "自动检测作品保存状态", onText: "开启", offText: "关闭" }));
     GM_registerMenuCommand("🔄 强制更新 Eagle 索引", forceRefreshEagleIndex);
     GM_registerMenuCommand("📂 设置小说保存路径", setNovelSavePath);
     GM_registerMenuCommand("📚 切换：小说保存格式 (TXT/MD/EPUB)", setNovelSaveFormat);
-    GM_registerMenuCommand("🧪 切换：调试模式", toggleDebugMode);
+    GM_registerMenuCommand("🧪 切换：调试模式", makeToggle({ key: "debugMode", label: "调试模式" }));
     GM_registerMenuCommand("🧪 设置画师文件夹名称模板", setArtistMatcher);
 
     class ArtistMatcher {
