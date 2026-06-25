@@ -710,22 +710,21 @@
     // 检查 Eagle 是否运行
     async function checkEagle() {
         try {
-            // 添加超时处理（5秒）
-            const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error("Eagle API 调用超时（5秒）")), EAGLE_CHECK_TIMEOUT);
+            const data = await gmFetch("http://localhost:41595/api/application/info", {
+                timeout: EAGLE_CHECK_TIMEOUT,
             });
-            
-            const data = await Promise.race([
-                gmFetch("http://localhost:41595/api/application/info"),
-                timeoutPromise
-            ]);
-            
+
             return {
                 running: true,
                 version: data.data.version,
             };
         } catch (error) {
-            console.error("Eagle 未启动或无法连接:", error);
+            const msg = (error && error.message) ? error.message : String(error);
+            if (msg.includes("timed out")) {
+                console.error("[Pixiv2Eagle] Eagle API 调用超时（5秒）");
+            } else {
+                console.error("[Pixiv2Eagle] Eagle 未启动或无法连接:", error);
+            }
             return {
                 running: false,
                 version: null,
@@ -795,6 +794,7 @@
                     };
                 }
 
+                if (items.length === 0) break; // 空页：避免继续翻页
                 if (items.length < limit) break;
                 offset += items.length;
                 loopCount += 1;
@@ -1253,29 +1253,64 @@
         };
 
         // 监听 popstate 事件（后退/前进按钮触发）
-        window.addEventListener("popstate", () => {
-            handler();
-        });
+        // 用 once 守卫避免脚本被同页面重复注入时叠加监听
+        if (!window.__pixiv2eagle_popstateBound) {
+            window.addEventListener("popstate", () => {
+                handler();
+            });
+            window.__pixiv2eagle_popstateBound = true;
+        }
 
-        // 重写 history.pushState
-        const originalPushState = history.pushState;
-        history.pushState = function () {
-            originalPushState.apply(this, arguments);
-            handler();
-        };
+        // 重写 history.pushState（带重注册守卫）
+        if (!history.pushState.__pixiv2eagle_wrapped) {
+            const originalPushState = history.pushState;
+            const wrappedPushState = function () {
+                originalPushState.apply(this, arguments);
+                handler();
+            };
+            wrappedPushState.__pixiv2eagle_wrapped = true;
+            history.pushState = wrappedPushState;
+        }
 
-        // 重写 history.replaceState
-        const originalReplaceState = history.replaceState;
-        history.replaceState = function () {
-            originalReplaceState.apply(this, arguments);
-            handler();
-        };
+        // 重写 history.replaceState（带重注册守卫）
+        if (!history.replaceState.__pixiv2eagle_wrapped) {
+            const originalReplaceState = history.replaceState;
+            const wrappedReplaceState = function () {
+                originalReplaceState.apply(this, arguments);
+                handler();
+            };
+            wrappedReplaceState.__pixiv2eagle_wrapped = true;
+            history.replaceState = wrappedReplaceState;
+        }
     }
+
+    // 模块级：记录每个 monitorInfo 当前活跃的观察器，防止重复注入堆积
+    const activePageObservers = new WeakMap();
 
     // 处理页面变化
     function handlePageChange(monitorInfo) {
+        // 若该 monitor 已有活跃观察器，先清理（防止 SPA 连续导航时观察器堆积）
+        const existing = activePageObservers.get(monitorInfo);
+        if (existing) {
+            existing.observer.disconnect();
+            clearInterval(existing.intervalId);
+        }
+
         // 立即尝试执行处理函数（添加页面元素）
         monitorInfo.handler();
+
+        // observeID 为 null 的 monitor 仅执行一次 handler + 有限次退避重试，不建观察器
+        if (monitorInfo.observeID === null) {
+            let retryCount = 0;
+            const retry = () => {
+                if (retryCount >= PAGE_RETRY_MAX_COUNT) return;
+                retryCount++;
+                monitorInfo.handler();
+                setTimeout(retry, PAGE_RETRY_INTERVAL_MS);
+            };
+            setTimeout(retry, PAGE_RETRY_INTERVAL_MS);
+            return;
+        }
 
         // 设置一个观察器来监视 DOM 变化
         const observer = new MutationObserver((mutations, obs) => {
@@ -1284,7 +1319,10 @@
             if (!button) {
                 monitorInfo.handler();
             } else {
-                observer.disconnect();
+                // 按钮已存在：立即清理观察器与计时器，无需等超时
+                obs.disconnect();
+                clearInterval(intervalId);
+                activePageObservers.delete(monitorInfo);
             }
         });
 
@@ -1294,25 +1332,37 @@
             subtree: true,
         });
 
-        // 30 秒后停止观察（避免无限观察）
-        setTimeout(() => {
-            observer.disconnect();
-        }, PAGE_OBSERVER_TIMEOUT_MS);
-
         // 同时设置一个间隔检查
         let checkCount = 0;
         const intervalId = setInterval(() => {
             const button = document.getElementById(monitorInfo.observeID);
             if (!button) {
                 monitorInfo.handler();
+            } else {
+                clearInterval(intervalId);
+                observer.disconnect();
+                activePageObservers.delete(monitorInfo);
+                return;
             }
 
             checkCount++;
             if (checkCount >= PAGE_RETRY_MAX_COUNT) {
-                // 5 秒后停止检查（PAGE_RETRY_INTERVAL_MS * PAGE_RETRY_MAX_COUNT）
+                // PAGE_RETRY_INTERVAL_MS * PAGE_RETRY_MAX_COUNT 后停止检查
                 clearInterval(intervalId);
+                observer.disconnect();
+                activePageObservers.delete(monitorInfo);
             }
         }, PAGE_RETRY_INTERVAL_MS);
+
+        // 记录活跃观察器，供下次重入清理
+        activePageObservers.set(monitorInfo, { observer, intervalId });
+
+        // PAGE_OBSERVER_TIMEOUT_MS 后停止观察（兜底，避免无限观察）
+        setTimeout(() => {
+            observer.disconnect();
+            clearInterval(intervalId);
+            activePageObservers.delete(monitorInfo);
+        }, PAGE_OBSERVER_TIMEOUT_MS);
     }
 
     // 创建 Pixiv 风格的按钮
