@@ -55,6 +55,17 @@
     const ARTWORK_BUTTON_CONTAINER_SELECTOR = 'div.sc-7fd477ff-3.jrRrCf'; // 作品详情页按钮容器
     const ARTWORK_BUTTON_REF_SELECTOR = 'div.sc-7fd477ff-4.duoqQE'; // 作品详情页按钮插入参考点
 
+    // Runtime Tunables —— 运行时可调参数（超时/间隔/分页/循环上限）
+    const EAGLE_CHECK_TIMEOUT          = 5000;   // checkEagle 连接超时（毫秒）
+    const EAGLE_ITEM_LIST_LIMIT        = 200;    // isArtworkSavedInEagle 单页条目数
+    const EAGLE_ITEM_LIST_MAX_PAGES    = 500;    // isArtworkSavedInEagle 最大翻页数（上限 10 万条目）
+    const EAGLE_ITEM_INFO_CONCURRENCY  = 5;      // isArtworkSavedInEagle 深度检查并发数
+    const PAGE_OBSERVER_TIMEOUT_MS     = 30000;  // handlePageChange 观察器存活上限（毫秒）
+    const PAGE_RETRY_INTERVAL_MS       = 500;    // handlePageChange 重试间隔（毫秒）
+    const PAGE_RETRY_MAX_COUNT         = 10;     // handlePageChange 最大重试次数
+    const NOVEL_IMAGE_DOWNLOAD_DELAY_MS = 500;  // 小说图片下载延迟（毫秒，避免浏览器拦截）
+    const INDEX_EXPIRE_TIME = 24 * 60 * 60 * 1000; // Eagle 索引缓存有效期（24 小时，毫秒）
+
     // ========== 特征识别函数 ==========
     
     /**
@@ -701,7 +712,7 @@
         try {
             // 添加超时处理（5秒）
             const timeoutPromise = new Promise((_, reject) => {
-                setTimeout(() => reject(new Error("Eagle API 调用超时（5秒）")), 5000);
+                setTimeout(() => reject(new Error("Eagle API 调用超时（5秒）")), EAGLE_CHECK_TIMEOUT);
             });
             
             const data = await Promise.race([
@@ -729,13 +740,13 @@
         }
 
         const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
-        const limit = 200;
+        const limit = EAGLE_ITEM_LIST_LIMIT;
 
         try {
             let offset = 0;
             let loopCount = 0;
 
-            while (loopCount < 100000) {
+            while (loopCount < EAGLE_ITEM_LIST_MAX_PAGES) {
                 const params = new URLSearchParams({
                     folders: folderId,
                     limit: limit.toString(),
@@ -757,7 +768,7 @@
                 // 2. 深度检查：如果列表没找到，遍历调用 /api/item/info 获取详细信息对比
                 // (优化：解决列表接口可能返回不完整或缓存数据的问题)
                 if (!matched && items.length > 0) {
-                    const concurrency = 5; // 并发数限制
+                    const concurrency = EAGLE_ITEM_INFO_CONCURRENCY; // 并发数限制
                     for (let i = 0; i < items.length; i += concurrency) {
                         const chunk = items.slice(i, i + concurrency);
                         const results = await Promise.all(chunk.map(async (item) => {
@@ -1286,7 +1297,7 @@
         // 30 秒后停止观察（避免无限观察）
         setTimeout(() => {
             observer.disconnect();
-        }, 30000);
+        }, PAGE_OBSERVER_TIMEOUT_MS);
 
         // 同时设置一个间隔检查
         let checkCount = 0;
@@ -1297,11 +1308,11 @@
             }
 
             checkCount++;
-            if (checkCount >= 10) {
-                // 5 秒后停止检查（500ms * 10）
+            if (checkCount >= PAGE_RETRY_MAX_COUNT) {
+                // 5 秒后停止检查（PAGE_RETRY_INTERVAL_MS * PAGE_RETRY_MAX_COUNT）
                 clearInterval(intervalId);
             }
-        }, 500);
+        }, PAGE_RETRY_INTERVAL_MS);
     }
 
     // 创建 Pixiv 风格的按钮
@@ -1793,7 +1804,7 @@
             if (downloadImages) {
                 for (let i = 0; i < combinedContent.images.length; i++) {
                     const image = combinedContent.images[i];
-                    await new Promise(resolve => setTimeout(resolve, 500)); // 延迟避免浏览器阻止多个下载
+                    await new Promise(resolve => setTimeout(resolve, NOVEL_IMAGE_DOWNLOAD_DELAY_MS)); // 延迟避免浏览器阻止多个下载
                     const success = await downloadImageToLocal(image.url, image.filename);
                     if (success) {
                         imagePaths.push(image.filename);
@@ -3078,9 +3089,6 @@
     let currentRecObserver = null;
     let isRecAreaInitializing = false;
     let currentRecUrl = ""; // 记录当前监控的 URL，防止重复初始化
-
-    // 索引过期时间：24小时
-    const INDEX_EXPIRE_TIME = 24 * 60 * 60 * 1000; // 24小时（毫秒）
 
     // 索引序列化：将 Map 转换为可存储的普通对象
     function serializeIndex(index) {
