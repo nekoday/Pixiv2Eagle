@@ -17,6 +17,8 @@
     import { registerMenuCommands } from "./Tampermonkey/menu.js";
     import { dbg, warn, err } from "./Tampermonkey/logger.js";
     import { showToast, showMessage } from "./ui/toast.js";
+    import { createPixivStyledButton } from "./ui/button.js";
+    import { waitForElement, waitForSectionWithin } from "./ui/dom.js";
     import { gmFetch, gmFetchBinary, gmFetchText } from "./Tampermonkey/request.js";
     import {
         loadEagleIndexCache,
@@ -1127,50 +1129,6 @@
         }, PAGE_OBSERVER_TIMEOUT_MS);
     }
 
-    // 创建 Pixiv 风格的按钮
-    function createPixivStyledButton(text) {
-        const button = document.createElement("div");
-        button.textContent = text;
-        button.style.cursor = "pointer";
-        button.style.fontSize = "14px";
-        button.style.padding = "8px 16px";
-        button.style.borderRadius = "999px";
-        button.style.color = "#333";
-        button.style.backgroundColor = "transparent";
-        button.style.display = "flex";
-        button.style.alignItems = "center";
-        button.style.gap = "4px";
-        button.style.transition = "all 0.2s ease";
-        button.style.border = "1px solid #d6d6d6";
-
-        // 添加鼠标悬浮效果
-        button.addEventListener("mouseenter", () => {
-            button.style.backgroundColor = "#0096fa";
-            button.style.color = "white";
-            button.style.border = "1px solid #0096fa";
-        });
-
-        // 添加鼠标离开效果
-        button.addEventListener("mouseleave", () => {
-            button.style.backgroundColor = "transparent";
-            button.style.color = "#333";
-            button.style.border = "1px solid #d6d6d6";
-        });
-
-        // 添加点击效果
-        button.addEventListener("mousedown", () => {
-            button.style.backgroundColor = "#0075c5";
-            button.style.border = "1px solid #0075c5";
-        });
-
-        button.addEventListener("mouseup", () => {
-            button.style.backgroundColor = "#0096fa";
-            button.style.border = "1px solid #0096fa";
-        });
-
-        return button;
-    }
-
     // 获取作品 ID
     function getArtworkId() {
         const match = location.pathname.match(/^\/artworks\/(\d+)/);
@@ -1881,73 +1839,6 @@
             err(error);
             showMessage(`打开画师文件夹失败: ${error.message}`, true);
         }
-    }
-
-    // 等待目标 section 元素加载
-    function waitForElement(selector, timeout = 10000) {
-        return new Promise((resolve) => {
-            // 首先检查元素是否已经存在
-            const element = document.querySelector(selector);
-            if (element) {
-                return resolve(element);
-            }
-
-            // 如果元素不存在，设置观察器
-            const observer = new MutationObserver((mutations, obs) => {
-                const element = document.querySelector(selector);
-                if (element) {
-                    obs.disconnect();
-                    resolve(element);
-                }
-            });
-
-            observer.observe(document.body, {
-                childList: true,
-                subtree: true,
-            });
-
-            // 超时
-            setTimeout(() => {
-                observer.disconnect();
-                resolve(null);
-            }, timeout);
-        });
-    }
-
-    function waitForSectionWithin(parent, timeout = 10000) {
-        const getFirstSection = () => {
-            const children = parent.children ? Array.from(parent.children) : [];
-            const directChild = children.find((child) => child.tagName && child.tagName.toLowerCase() === "section");
-            if (directChild) {
-                return directChild;
-            }
-            return parent.querySelector("section");
-        };
-
-        const existing = getFirstSection();
-        if (existing) {
-            return Promise.resolve(existing);
-        }
-
-        return new Promise((resolve) => {
-            const observer = new MutationObserver((mutations, obs) => {
-                const section = getFirstSection();
-                if (section) {
-                    obs.disconnect();
-                    resolve(section);
-                }
-            });
-
-            observer.observe(parent, {
-                childList: true,
-                subtree: true,
-            });
-
-            setTimeout(() => {
-                observer.disconnect();
-                resolve(null);
-            }, timeout);
-        });
     }
 
     // 自动检测 Eagle 中是否已有当前作品，并更新按钮文案
