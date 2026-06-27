@@ -2,6 +2,7 @@
 
     import { SETTING_KEYS } from "./Tampermonkey/setting.js";
     import { dbg, warn, err } from "./Tampermonkey/logger.js";
+    import { showToast, showMessage } from "./ui/toast.js";
     import { gmFetch, gmFetchBinary, gmFetchText } from "./Tampermonkey/request.js";
     import {
         EAGLE_SAVE_BUTTON_ID,
@@ -457,13 +458,6 @@
         updateTemplate(newTemplate) {
             this.template = newTemplate;
             this.regex = this.createRegex(newTemplate);
-        }
-    }
-
-    // 显示消息（根据调试模式决定是否显示）
-    function showMessage(message, forceShow = false) {
-        if (getDebugMode() || forceShow) {
-            alert(message);
         }
     }
 
