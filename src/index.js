@@ -1,5 +1,10 @@
     "use strict";
 
+    import { SETTING_KEYS } from "./Tampermonkey/setting.js";
+
+    // Phase 0: ESM 入口已启用；SETTING_KEYS 来自 Tampermonkey/setting.js
+    void SETTING_KEYS;
+
     // 常量定义
     const EAGLE_SAVE_BUTTON_ID = "eagle-save-button-wrapper";
     const EAGLE_OPEN_ITEM_BUTTON_ID = "eagle-open-artwork-button";
