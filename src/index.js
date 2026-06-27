@@ -33,7 +33,6 @@
         PIXIV_SECTION_CLASS,
         PIXIV_ARTIST_DIV_CLASS,
         USE_DOMESTIC_CDN,
-        EAGLE_CHECK_TIMEOUT,
         EAGLE_ITEM_LIST_LIMIT,
         EAGLE_ITEM_LIST_MAX_PAGES,
         EAGLE_ITEM_INFO_CONCURRENCY,
@@ -43,6 +42,8 @@
     import { createMonitorConfig } from "./config/monitor.js";
     import { observeUrlChanges } from "./routing/observe-url.js";
     import { handlePageChange } from "./routing/handle-page.js";
+    import { checkEagle } from "./eagle/client.js";
+    import { createEagleFolder, createArtistFolder, getSeriesFolder } from "./eagle/folder.js";
     import {
         REC_SECTION_SELECTOR,
         REC_CONTAINER_SELECTOR,
@@ -249,7 +250,7 @@
     }
 
     // 根据用户模板串创建 ArtistMatcher 实例
-    function getArtistMatcher() {
+    export function getArtistMatcher() {
         return new ArtistMatcher(GM_getValue("folderNameTemplate", "$name"));
     }
 
@@ -475,31 +476,6 @@
         };
     }
 
-    // 检查 Eagle 是否运行
-    async function checkEagle() {
-        try {
-            const data = await gmFetch("http://localhost:41595/api/application/info", {
-                timeout: EAGLE_CHECK_TIMEOUT,
-            });
-
-            return {
-                running: true,
-                version: data.data.version,
-            };
-        } catch (error) {
-            const msg = (error && error.message) ? error.message : String(error);
-            if (msg.includes("timed out")) {
-                err("Eagle API 调用超时（5秒）");
-            } else {
-                err("Eagle 未启动或无法连接:", error);
-            }
-            return {
-                running: false,
-                version: null,
-            };
-        }
-    }
-
     // 查询 Eagle 中是否已保存指定作品
     async function isArtworkSavedInEagle(artworkId, folderId) {
         if (!folderId) {
@@ -694,70 +670,6 @@
         });
     }
 
-    // 创建 Eagle 文件夹
-    async function createEagleFolder(folderName, parentId = null, description = "") {
-        try {
-            const data = await gmFetch("http://localhost:41595/api/folder/create", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                    folderName: folderName,
-                    ...(parentId && { parent: parentId }),
-                }),
-            });
-
-            if (!data.status) {
-                throw new Error("创建文件夹失败");
-            }
-
-            const newFolderId = data.data.id;
-
-            // 如果有描述，更新文件夹描述
-            if (description) {
-                const updateData = await gmFetch("http://localhost:41595/api/folder/update", {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({
-                        folderId: newFolderId,
-                        newDescription: description,
-                    }),
-                });
-
-                if (!updateData.status) {
-                    throw new Error("更新文件夹描述失败");
-                }
-            }
-
-            return newFolderId;
-        } catch (error) {
-            err("创建文件夹失败:", error);
-            throw error;
-        }
-    }
-
-    // 创建画师专属文件夹
-    async function createArtistFolder(artistName, artistId, parentId = null) {
-        const artistMatcher = getArtistMatcher();
-        const folderName = artistMatcher.generate(artistId, artistName);
-
-        try {
-            const newFolderId = await createEagleFolder(folderName, parentId, `pid = ${artistId}`);
-            return {
-                existed: false,
-                id: newFolderId,
-                name: artistName,
-                children: [],
-            };
-        } catch (error) {
-            err("创建画师文件夹失败:", error);
-            throw error;
-        }
-    }
-
     // 查找或创建画师专属文件夹
     async function getArtistFolder(pixivFolderId, artistId, artistName) {
         // 先查找
@@ -793,36 +705,6 @@
             artistFolder.children.push(typeFolder);
         }
         return typeFolder;
-    }
-
-    // 查找系列文件夹
-    async function getSeriesFolder(artistFolder, artistId, seriesId, seriesName) {
-        const existingFolder = artistFolder.children.find((folder) => {
-            const description = folder.description || "";
-            const match = description.match(/^https?:\/\/www\.pixiv\.net\/user\/(\d+)\/series\/(\d+)\/?$/);
-            return match && match[1] === artistId && match[2] === seriesId;
-        });
-
-        if (existingFolder) {
-            return {
-                existed: true,
-                id: existingFolder.id,
-                name: existingFolder.name,
-                children: existingFolder.children,
-            };
-        }
-
-        const newSeriesFolderId = await createEagleFolder(
-            seriesName,
-            artistFolder.id,
-            `https://www.pixiv.net/user/${artistId}/series/${seriesId}`
-        );
-        return {
-            existed: false,
-            id: newSeriesFolderId,
-            name: seriesName,
-            children: [],
-        };
     }
 
     // 查找已保存作品所在的文件夹（包含系列与子文件夹描述）
