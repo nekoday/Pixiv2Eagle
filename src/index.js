@@ -16,8 +16,7 @@
     import { showToast, showMessage } from "./ui/toast.js";
     import { createPixivStyledButton } from "./ui/button.js";
     import { waitForElement } from "./ui/dom.js";
-    import { removeChapterNumber } from "./shared/chapter-title.js";
-    import { insertSavedBadge } from "./shared/marking/insert-badge.js";
+    import { debouncedMarkSavedInArtistList } from "./artist-list/marking.js";
     import { gmFetch, gmFetchBinary, gmFetchText } from "./Tampermonkey/request.js";
     import {
         EAGLE_SAVE_BUTTON_ID,
@@ -27,7 +26,7 @@
     import { observeUrlChanges } from "./routing/observe-url.js";
     import { handlePageChange } from "./routing/handle-page.js";
     import { checkEagle } from "./eagle/client.js";
-    import { createEagleFolder, getSeriesFolder } from "./eagle/folder.js";
+    import { createEagleFolder } from "./eagle/folder.js";
     import {
         findArtistFolder,
         getArtistFolder,
@@ -48,8 +47,6 @@
         LIST_CONTAINER_SELECTOR,
         SERIES_PAGE_LIST_SELECTOR,
         THUMBNAIL_CONTAINER_SELECTOR,
-        SERIES_NAV_BUTTON_SELECTOR,
-        MANGA_SERIES_HEADER_SELECTOR,
         NOVEL_TITLE_SELECTOR,
         NOVEL_DESC_SELECTOR,
         NOVEL_COVER_SELECTOR,
@@ -498,282 +495,6 @@
     }
 
 
-    // 更新系列漫画的序号 (批量重命名)
-    async function updateSeriesChapters() {
-        const folderId = getFolderId();
-        if (!folderId) {
-            alert("请先设置 Pixiv 文件夹 ID！");
-            return;
-        }
-
-        const eagleStatus = await checkEagle();
-        if (!eagleStatus.running) {
-            alert("Eagle 未启动！");
-            return;
-        }
-
-        // 1. 获取系列信息
-        const seriesIdMatch = location.pathname.match(/\/series\/(\d+)/);
-        if (!seriesIdMatch) {
-            alert("无法获取系列 ID");
-            return;
-        }
-        const seriesId = seriesIdMatch[1];
-
-        // 尝试获取画师 ID (从当前 URL 中查找)
-        // URL 格式通常为 /user/{uid}/series/{seriesId} 或 /users/{uid}/series/{seriesId}
-        let artistId = null;
-        const artistIdMatch = location.pathname.match(new RegExp(`\/users?\/(\\d+)\/series\/${seriesId}`));
-        if (artistIdMatch) {
-            artistId = artistIdMatch[1];
-        }
-
-        if (!artistId) {
-            alert("无法获取画师 ID");
-            return;
-        }
-
-        try {
-            // 2. 查找 Eagle 中的系列文件夹
-            const artistFolder = await findArtistFolder(folderId, artistId);
-            if (!artistFolder) {
-                alert("Eagle 中未找到该画师的文件夹");
-                return;
-            }
-
-            let seriesFolder = findSeriesFolderInArtist(artistFolder, artistId, seriesId);
-
-            // 如果在画师根目录下没找到，尝试在类型文件夹（如“漫画”）中查找
-            if (!seriesFolder && artistFolder.children) {
-                const typeFolders = artistFolder.children.filter(c => ['illustrations', 'manga', 'novels'].includes(c.description));
-                for (const tf of typeFolders) {
-                    const found = findSeriesFolderInArtist(tf, artistId, seriesId);
-                    if (found) {
-                        seriesFolder = found;
-                        break;
-                    }
-                }
-            }
-
-            if (!seriesFolder) {
-                alert("Eagle 中未找到该系列的文件夹");
-                return;
-            }
-
-            // 3. 遍历页面上的章节列表
-            const listContainer = document.querySelector(SERIES_PAGE_LIST_SELECTOR);
-            if (!listContainer) {
-                alert("未找到章节列表");
-                return;
-            }
-
-            const lis = listContainer.querySelectorAll('li');
-            dbg(`找到 ${lis.length} 个章节列表项`);
-
-            if (!seriesFolder.children) {
-                dbg("系列文件夹没有子文件夹信息，尝试重新获取");
-                // 尝试重新获取该文件夹的详情，以确保 children 存在
-                // 注意：Eagle API folder/list 返回的是全树，但如果我们拿到的对象不完整，可能需要刷新
-                // 这里假设 seriesFolder 已经是完整的。如果为空，可能是真的没有子文件夹。
-                seriesFolder.children = [];
-            }
-            dbg(`Eagle 系列文件夹中有 ${seriesFolder.children.length} 个子文件夹`);
-
-            let updateCount = 0;
-
-            for (const li of lis) {
-                // 优先使用用户指定的标题容器选择器，确保提取到的是标题文本而非缩略图或其他链接
-                let link = li.querySelector('div.sc-fab8f26d-1.kcKSxC a');
-                // 降级策略
-                if (!link) link = li.querySelector('a[href*="/artworks/"]');
-                
-                if (!link) continue;
-
-                const href = link.getAttribute('href');
-                const pidMatch = href.match(/\/artworks\/(\d+)/);
-                if (!pidMatch) continue;
-                const pid = pidMatch[1];
-
-                // 克隆节点以清理干扰文本（如徽章）
-                const linkClone = link.cloneNode(true);
-                
-                // 移除 Eagle 标记
-                const eagleBadge = linkClone.querySelector('.eagle-saved-badge');
-                if (eagleBadge) eagleBadge.remove();
-
-                // 移除 R-18 标记 (通常是 div 或 span，内容为 R-18)
-                const badges = linkClone.querySelectorAll('div, span');
-                badges.forEach(el => {
-                    if (el.textContent.trim() === 'R-18') el.remove();
-                });
-
-                const title = linkClone.textContent.trim();
-
-                // 尝试提取章节序号
-                // 假设标题包含 #数字 或 第数字话，或者是纯数字
-                let chapterNum = null;
-                const numMatch = title.match(/#(\d+)/) || title.match(/第(\d+)[话話]/) || title.match(/^(\d+)$/);
-                if (numMatch) {
-                    chapterNum = numMatch[1];
-                }
-
-                if (!chapterNum) {
-                    dbg(`无法从标题 "${title}" 中提取序号，跳过`);
-                    continue;
-                }
-
-                // 4. 在 Eagle 系列文件夹中查找对应章节文件夹
-                // 假设章节文件夹的 description 是 PID
-                // 使用 trim() 避免空白字符导致匹配失败
-                let chapterFolder = seriesFolder.children.find(c => (c.description || "").trim() === pid);
-
-                // 如果通过 PID 没找到，尝试通过标题查找
-                if (!chapterFolder) {
-                    // 移除标题中的序号部分，以便进行模糊匹配
-                    const searchTitle = removeChapterNumber(title);
-                    
-                    if (searchTitle) {
-                        // 尝试在子文件夹名称中查找 (只要包含处理后的标题即可)
-                        chapterFolder = seriesFolder.children.find(c => c.name.includes(searchTitle));
-                        if (chapterFolder) {
-                            dbg(`通过标题 "${searchTitle}" 匹配到文件夹: ${chapterFolder.name}`);
-                        }
-                    }
-                }
-
-                if (chapterFolder) {
-                    // 构造新名称: #序号 标题
-                    // 如果标题本身已经包含 #序号，则避免重复
-                    let newName = title;
-                    if (!newName.startsWith(`#${chapterNum}`)) {
-                        newName = `#${chapterNum} ${title}`;
-                    }
-
-                    // 如果名称不同，则重命名文件夹
-                    if (chapterFolder.name !== newName) {
-                        dbg(`重命名文件夹: ${chapterFolder.name} -> ${newName}`);
-                        await gmFetch("http://localhost:41595/api/folder/rename", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ folderId: chapterFolder.id, newName: newName })
-                        });
-                        updateCount++;
-                    }
-
-                    // 5. 重命名文件夹内的图片
-                    // 获取文件夹内所有图片
-                    const items = await getAllEagleItemsInFolder(chapterFolder.id);
-                    if (items && items.length > 0) {
-                        for (const item of items) {
-                            // 尝试提取页码后缀 (_0, _1, _p0, _p1 等)
-                            // Eagle 的 item.name 通常不包含扩展名
-                            const suffixMatch = item.name.match(/(_p?\d+)$/);
-                            let suffix = "";
-                            
-                            if (suffixMatch) {
-                                suffix = suffixMatch[1];
-                            } else if (items.length > 1) {
-                                // 如果有多张图片且无法识别后缀，跳过以防命名冲突
-                                warn(`无法识别图片后缀且存在多张图片，跳过重命名: ${item.name}`);
-                                continue;
-                            }
-
-                            const newItemName = `${newName}${suffix}`;
-                            if (item.name !== newItemName) {
-                                dbg(`重命名图片: ${item.name} -> ${newItemName}`);
-                                await gmFetch("http://localhost:41595/api/item/update", {
-                                    method: "POST",
-                                    headers: { "Content-Type": "application/json" },
-                                    body: JSON.stringify({ id: item.id, name: newItemName })
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-
-            alert(`更新完成！共更新了 ${updateCount} 个章节文件夹。`);
-
-        } catch (e) {
-            err(e);
-            alert("更新失败: " + e.message);
-        }
-    }
-
-    // 添加更新系列按钮
-    async function addUpdateSeriesButton() {
-        // 仅在系列页面运行
-        if (!location.pathname.includes('/series/')) return;
-
-        // 目标：放在 "阅读第一话" 按钮旁边
-        // 选择器：div.gtm-manga-series-first-story 或其父容器
-        // 通常结构：div > a.gtm-manga-series-first-story
-        // 我们尝试找到包含该按钮的容器
-        const firstStoryBtn = await waitForElement('.gtm-manga-series-first-story', 5000);
-        if (!firstStoryBtn) {
-            // 降级：如果找不到特定按钮，尝试放在 header 中
-            const header = await waitForElement(MANGA_SERIES_HEADER_SELECTOR);
-            if (!header) return;
-            if (document.getElementById('eagle-update-series-btn')) return;
-            
-            const btn = createPixivStyledButton("更新系列序号");
-            btn.id = 'eagle-update-series-btn';
-            btn.style.marginLeft = '10px';
-            btn.onclick = updateSeriesChapters;
-            header.appendChild(btn);
-            return;
-        }
-
-        // 找到容器 (通常是 firstStoryBtn 的父级或本身)
-        // 假设 firstStoryBtn 是一个 a 标签或 div，我们需要插在它后面
-        const container = firstStoryBtn.parentElement;
-        if (!container) return;
-
-        if (document.getElementById('eagle-update-series-btn')) return;
-
-        const btn = createPixivStyledButton("更新系列漫画的序号");
-        btn.id = 'eagle-update-series-btn';
-        // 样式调整：蓝色背景，白色文字，圆角
-        btn.style.backgroundColor = '#0096fa';
-        btn.style.color = '#fff';
-        btn.style.border = 'none';
-        btn.style.fontWeight = 'bold';
-        btn.style.marginLeft = '16px'; // 保持适当间距
-        btn.style.height = '32px'; // 与 Pixiv 按钮高度一致
-        btn.style.padding = '0 16px';
-        
-        // 覆盖默认的 hover 效果
-        btn.onmouseenter = () => {
-            btn.style.backgroundColor = '#0075c5';
-        };
-        btn.onmouseleave = () => {
-            btn.style.backgroundColor = '#0096fa';
-            btn.style.color = '#fff';
-        };
-        btn.onmousedown = () => {
-            btn.style.backgroundColor = '#005c9c';
-        };
-        btn.onmouseup = () => {
-            btn.style.backgroundColor = '#0075c5';
-        };
-
-        btn.onclick = updateSeriesChapters;
-
-        // 插入到 firstStoryBtn 后面
-        // 检查 container 的布局，如果是 flex，直接 append 即可
-        // 为了保险，使用 insertBefore nextSibling
-        container.insertBefore(btn, firstStoryBtn.nextSibling);
-        
-        // 确保容器是 flex 布局以便对齐
-        const computedStyle = window.getComputedStyle(container);
-        if (computedStyle.display !== 'flex') {
-            container.style.display = 'flex';
-            container.style.alignItems = 'center';
-        }
-        // 强制设置宽度为 100%
-        container.style.width = '100%';
-    }
-
     // 在画师作品列表页面标注已保存的作品（在作品标题前添加 ✅）
     async function markSavedInArtistList() {
         // 清理旧的 Observer，防止重复监听
@@ -945,67 +666,14 @@
 
             // 如果是系列页面，优先查找系列文件夹并在该文件夹下递归寻找 item/url 与子文件夹描述（备注为 pid）
             if (location.pathname.includes('/series/')) {
-                // 尝试添加更新按钮
-                addUpdateSeriesButton();
-
-                log('检测到系列页面，开始处理系列文件夹');
-                try {
-                    const seriesMatch = location.pathname.match(/\/series\/(\d+)/);
-                    const seriesId = seriesMatch ? seriesMatch[1] : null;
-                    log('系列ID:', seriesId);
-                    if (seriesId) {
-                        // 重新获取画师文件夹的最新数据（包含完整的子文件夹树）
-                        const updatedArtistFolder = await findArtistFolder(pixivFolderId, artistId);
-                        if (!updatedArtistFolder) {
-                            log('系列页面但无法重新获取画师文件夹');
-                        } else {
-                            log('已重新获取画师文件夹，查找系列文件夹');
-                            // 1. 在画师根目录下找系列
-                            let seriesFolder = findSeriesFolderInArtist(updatedArtistFolder, artistId, seriesId);
-                            
-                            // 2. 如果没找到，且可能在类型文件夹下（如“漫画”文件夹）
-                            if (!seriesFolder && updatedArtistFolder.children) {
-                                const typeFolders = updatedArtistFolder.children.filter(c => ['illustrations', 'manga', 'novels'].includes(c.description));
-                                for (const tf of typeFolders) {
-                                    seriesFolder = findSeriesFolderInArtist(tf, artistId, seriesId);
-                                    if (seriesFolder) break;
-                                }
-                            }
-
-                            if (seriesFolder) {
-                                log('找到系列文件夹:', seriesFolder.id, '，名称:', seriesFolder.name, '，将递归检查其 items 与子文件夹描述');
-                                // 递归获取系列文件夹下所有层级的 items
-                                async function collectSeriesFolderItems(folder) {
-                                    if (!folder || !folder.id) return;
-                                    try {
-                                        const folderItems = await getAllEagleItemsInFolder(folder.id);
-                                        log('系列文件夹', folder.id, '中 items 数量:', folderItems ? folderItems.length : 0);
-                                        for (const it of folderItems || []) if (it && it.url) urlSet.add(it.url);
-                                    } catch (e) {
-                                        err('拉取系列文件夹 items 失败:', folder.id, e);
-                                    }
-                                    if (!folder.children || folder.children.length === 0) return;
-                                    for (const child of folder.children) {
-                                        const d = (child.description || '').trim();
-                                        if (d) {
-                                            folderDescSet.add(d);
-                                            folderDescMap[d] = child.id;
-                                        }
-                                        // 递归子文件夹
-                                        await collectSeriesFolderItems(child);
-                                    }
-                                }
-                                await collectSeriesFolderItems(seriesFolder);
-                                log('系列页面递归收集完成，urlSet 大小:', urlSet.size, '，folderDescSet 大小:', folderDescSet.size);
-                            } else {
-                                log('系列页面但未在 Eagle 中找到对应系列文件夹（seriesId:', seriesId, '）');
-                                log('画师文件夹子目录列表:', updatedArtistFolder.children.map(c => `${c.name} (${c.description})`).join(', '));
-                            }
-                        }
-                    }
-                } catch (e) {
-                    err('处理系列页面时出错:', e);
-                }
+                await enrichMarkingContextForMangaSeriesPage({
+                    pixivFolderId,
+                    artistId,
+                    urlSet,
+                    folderDescSet,
+                    folderDescMap,
+                    log,
+                });
             }
 
             // 插入标记的函数：将勾号浮动到作品卡片容器左下角（优先使用容器类名: sc-4822cddd-0 eCgTWT），

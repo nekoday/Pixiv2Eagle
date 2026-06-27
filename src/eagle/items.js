@@ -14,6 +14,12 @@ import { findArtistFolder } from "./artist.js";
 import { getTypeFolderInfo } from "./type-folder.js";
 import { getArtworkDetails } from "../artwork/details.js";
 import { convertUgoiraToGifBlob, blobToDataURL } from "../artwork/ugoira/convert.js";
+import {
+    findMangaSeriesFolderInArtistTree,
+    findSeriesFolderInArtist,
+} from "../manga/series/folder.js";
+
+export { findSeriesFolderInArtist };
 
 // 查询 Eagle 中是否已保存指定作品
 export async function isArtworkSavedInEagle(artworkId, folderId) {
@@ -91,28 +97,6 @@ export async function isArtworkSavedInEagle(artworkId, folderId) {
     return { saved: false, itemId: null };
 }
 
-// 在画师文件夹中查找指定系列文件夹（不创建）
-export function findSeriesFolderInArtist(artistFolder, artistId, seriesId) {
-    if (!artistFolder || !artistFolder.children) return null;
-
-    // 调试：打印所有子文件夹的描述，帮助排查匹配失败原因
-    dbg(`正在画师文件夹中查找系列 ${seriesId}，子文件夹数量: ${artistFolder.children.length}`);
-
-    return artistFolder.children.find((folder) => {
-        const description = (folder.description || "").trim();
-        // 宽松匹配：允许 http/https，允许末尾斜杠，允许描述中包含额外空白
-        // 同时也尝试匹配仅包含 URL 的情况
-        const urlPattern = new RegExp(`https?:\\/\\/www\\.pixiv\\.net\\/user\\/${artistId}\\/series\\/${seriesId}\\/?`);
-        const match = description.match(urlPattern);
-
-        if (description) {
-            dbg(`检查文件夹: ${folder.name}, 描述: ${description}, 匹配结果: ${!!match}`);
-        }
-
-        return !!match;
-    });
-}
-
 // 查找已保存作品所在的文件夹（包含系列与子文件夹描述）
 export async function findSavedFolderForArtwork(artworkId) {
     try {
@@ -138,20 +122,7 @@ export async function findSavedFolderForArtwork(artworkId) {
             const seriesId =
                 details.seriesNavData?.seriesId || (location.pathname.match(/\/series\/(\d+)/) || [])[1];
             if (seriesId) {
-                // 1. 在画师根目录下找系列
-                let seriesFolder = findSeriesFolderInArtist(artistFolder, details.userId, seriesId);
-
-                // 2. 如果没找到，且可能在类型文件夹下（如“漫画”文件夹）
-                if (!seriesFolder && artistFolder.children) {
-                    const typeFolders = artistFolder.children.filter((c) =>
-                        ["illustrations", "manga", "novels"].includes(c.description)
-                    );
-                    for (const tf of typeFolders) {
-                        seriesFolder = findSeriesFolderInArtist(tf, details.userId, seriesId);
-                        if (seriesFolder) break;
-                    }
-                }
-
+                const seriesFolder = findMangaSeriesFolderInArtistTree(artistFolder, details.userId, seriesId);
                 if (seriesFolder) {
                     currentFolder = seriesFolder;
                 }
