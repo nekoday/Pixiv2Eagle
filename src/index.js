@@ -1,18 +1,25 @@
     "use strict";
 
     import { SETTING_KEYS } from "./Tampermonkey/setting.js";
+    import {
+        EAGLE_SAVE_BUTTON_ID,
+        EAGLE_OPEN_ITEM_BUTTON_ID,
+        PIXIV_SECTION_CLASS,
+        PIXIV_ARTIST_DIV_CLASS,
+        USE_DOMESTIC_CDN,
+        EAGLE_CHECK_TIMEOUT,
+        EAGLE_ITEM_LIST_LIMIT,
+        EAGLE_ITEM_LIST_MAX_PAGES,
+        EAGLE_ITEM_INFO_CONCURRENCY,
+        PAGE_OBSERVER_TIMEOUT_MS,
+        PAGE_RETRY_INTERVAL_MS,
+        PAGE_RETRY_MAX_COUNT,
+        NOVEL_IMAGE_DOWNLOAD_DELAY_MS,
+        INDEX_EXPIRE_TIME,
+    } from "./config/constants.js";
 
     // Phase 0: ESM 入口已启用；SETTING_KEYS 来自 Tampermonkey/setting.js
     void SETTING_KEYS;
-
-    // 常量定义
-    const EAGLE_SAVE_BUTTON_ID = "eagle-save-button-wrapper";
-    const EAGLE_OPEN_ITEM_BUTTON_ID = "eagle-open-artwork-button";
-    const PIXIV_SECTION_CLASS = "sc-7709e4d9-0"; // deprecated
-    const PIXIV_ARTIST_DIV_CLASS = "sc-946c1cc3-1 lnPJtB"; // deprecated
-    
-    // JS 库加载源开关（true = 国内源，false = 国际源）
-    const USE_DOMESTIC_CDN = true;
 
     // DOM Selectors - Recommendation Area
     const REC_SECTION_SELECTOR = 'section[class*="sc-79c00fd3-0"]'; // 推荐作品区域容器 (Section)
@@ -59,17 +66,6 @@
     const MANGA_SERIES_HEADER_SELECTOR = 'div.sc-e4a4c914-0.Hwtke'; // 漫画系列页面头部 (用于插入更新按钮)
     const ARTWORK_BUTTON_CONTAINER_SELECTOR = 'div.sc-7fd477ff-3.jrRrCf'; // 作品详情页按钮容器
     const ARTWORK_BUTTON_REF_SELECTOR = 'div.sc-7fd477ff-4.duoqQE'; // 作品详情页按钮插入参考点
-
-    // Runtime Tunables —— 运行时可调参数（超时/间隔/分页/循环上限）
-    const EAGLE_CHECK_TIMEOUT          = 5000;   // checkEagle 连接超时（毫秒）
-    const EAGLE_ITEM_LIST_LIMIT        = 200;    // isArtworkSavedInEagle 单页条目数
-    const EAGLE_ITEM_LIST_MAX_PAGES    = 500;    // isArtworkSavedInEagle 最大翻页数（上限 10 万条目）
-    const EAGLE_ITEM_INFO_CONCURRENCY  = 5;      // isArtworkSavedInEagle 深度检查并发数
-    const PAGE_OBSERVER_TIMEOUT_MS     = 30000;  // handlePageChange 观察器存活上限（毫秒）
-    const PAGE_RETRY_INTERVAL_MS       = 500;    // handlePageChange 重试间隔（毫秒）
-    const PAGE_RETRY_MAX_COUNT         = 10;     // handlePageChange 最大重试次数
-    const NOVEL_IMAGE_DOWNLOAD_DELAY_MS = 500;  // 小说图片下载延迟（毫秒，避免浏览器拦截）
-    const INDEX_EXPIRE_TIME = 24 * 60 * 60 * 1000; // Eagle 索引缓存有效期（24 小时，毫秒）
 
     // ========== 特征识别函数 ==========
     
