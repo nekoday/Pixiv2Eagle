@@ -39,55 +39,43 @@
         NOVEL_IMAGE_DOWNLOAD_DELAY_MS,
         INDEX_EXPIRE_TIME,
     } from "./config/constants.js";
+    import {
+        REC_SECTION_SELECTOR,
+        REC_CONTAINER_SELECTOR,
+        REC_WORK_LINK_SELECTOR,
+        REC_ARTIST_LINK_SELECTOR,
+        REC_THUMBNAIL_SELECTOR,
+        REC_THUMBNAIL_FALLBACK_SELECTOR,
+        ARTWORK_BUTTON_CONTAINER_SELECTOR,
+        ARTWORK_BUTTON_REF_SELECTOR,
+        LIST_CONTAINER_SELECTOR,
+        SERIES_PAGE_LIST_SELECTOR,
+        THUMBNAIL_CONTAINER_SELECTOR,
+        SERIES_NAV_BUTTON_SELECTOR,
+        MANGA_SERIES_INFO_SELECTOR,
+        MANGA_SERIES_HEADER_SELECTOR,
+        NOVEL_TITLE_SELECTOR,
+        NOVEL_DESC_SELECTOR,
+        NOVEL_COVER_SELECTOR,
+        NOVEL_AUTHOR_CONTAINER_SELECTOR,
+        NOVEL_CONTENT_SELECTOR,
+        NOVEL_TEXT_SPAN_SELECTOR,
+        NOVEL_SERIES_SECTION_SELECTOR,
+        NOVEL_SERIES_LINK_SELECTOR,
+        NOVEL_SERIES_TITLE_SELECTOR,
+        NOVEL_CHAPTER_NUMBER_LINK_SELECTOR,
+        NOVEL_SAVE_BUTTON_SECTION_SELECTOR,
+        NOVEL_TAGS_CONTAINER_SELECTOR,
+        NOVEL_TAG_ITEM_SELECTOR,
+        NOVEL_PUBLISH_DATE_CONTAINER_SELECTOR,
+        NOVEL_SERIES_LIST_SELECTOR,
+        NOVEL_CHAPTER_LINK_SELECTOR,
+        NOVEL_CHAPTER_BADGE_CONTAINER_SELECTOR,
+        NOVEL_CHAPTER_REF_BUTTON_SELECTOR,
+    } from "./config/selectors/index.js";
 
     // Phase 0: ESM 入口已启用；SETTING_KEYS 来自 Tampermonkey/setting.js
     void SETTING_KEYS;
-
-    // DOM Selectors - Recommendation Area
-    const REC_SECTION_SELECTOR = 'section[class*="sc-79c00fd3-0"]'; // 推荐作品区域容器 (Section)
-    const REC_CONTAINER_SELECTOR = 'div.sc-bf8cea3f-0.dKbaFf'; // 推荐作品区域容器 (Div, 新版)
-    const REC_WORK_LINK_SELECTOR = 'a.sc-fab8f26d-6'; // 推荐作品链接 (用于提取 PID)
-    const REC_ARTIST_LINK_SELECTOR = 'a.sc-fbe982d0-2'; // 推荐作品画师链接 (用于提取 UID)
-    const REC_THUMBNAIL_SELECTOR = 'div.sc-f44a0b30-9.cvPXKv'; // 推荐作品缩略图容器 (首选标记位置)
-    const REC_THUMBNAIL_FALLBACK_SELECTOR = 'div.sc-fab8f26d-3.etVILu'; // 推荐作品缩略图容器 (备选)
-    const REC_THUMBNAIL_FALLBACK_PARTIAL_SELECTOR = 'div.sc-fab8f26d-3'; // 推荐作品缩略图容器 (部分匹配备选)
-
-    // DOM Selectors - Artist List / Series
-    const LIST_CONTAINER_SELECTOR = 'div.sc-e83d358-0.daBOIJ'; // 画师插画/漫画列表容器
-    const SERIES_PAGE_LIST_SELECTOR = 'div.sc-de6bf819-3.cNVLSX'; // 系列页面作品列表容器
-    const THUMBNAIL_CONTAINER_SELECTOR = 'div.sc-f44a0b30-9.cvPXKv'; // 列表作品缩略图容器
-    const THUMBNAIL_CONTAINER_PARTIAL_SELECTOR = 'div.sc-f44a0b30-9'; // 列表作品缩略图容器 (部分匹配)
-    
-    // DOM Selectors - Novel
-    const NOVEL_TITLE_SELECTOR = 'h1.sc-57130d55-3.bwpTuX'; // 小说标题
-    const NOVEL_DESC_SELECTOR = 'div.sc-fcc502d1-0.jNYFaO > p.sc-fcc502d1-1.YOSSS'; // 小说简介
-    const NOVEL_SERIES_DESC_SELECTOR = 'div.sc-fcc502d1-0.jNYFaO > p.sc-fcc502d1-1.fDflWh'; // 小说系列简介
-    const NOVEL_COVER_SELECTOR = 'img.sc-41178ccf-19.cKuUeg'; // 小说封面图片
-    const NOVEL_SERIES_COVER_SELECTOR = 'img.sc-5aaa84d4-19.jFTOdN'; // 小说系列封面图片
-    const NOVEL_AUTHOR_CONTAINER_SELECTOR = 'a.sc-bypJrT.bUiITy'; // 小说作者信息容器（a标签，包含作者UID和作者名）
-    const NOVEL_CONTENT_SELECTOR = 'div.sc-ejfMa-d.eXXQXn'; // 小说正文内容容器
-    const NOVEL_TEXT_SPAN_SELECTOR = 'span.text-count'; // 小说正文段落 (每一段信息包含在 <span class="text-count"> 中，data-textcount 值随内容增长)
-    const NOVEL_SERIES_SECTION_SELECTOR = 'section.sc-55920ee2-1'; // 小说所属系列区域 (用于判断是否属于系列)
-    const NOVEL_SERIES_LINK_SELECTOR = 'a.sc-13d2e2cd-0.gwOqfd[href^="/novel/series/"]'; // 小说系列链接
-    const NOVEL_SERIES_TITLE_SELECTOR = 'h2.sc-edf844cc-2.emSEGV'; // 小说系列标题
-    const NOVEL_CHAPTER_NUMBER_LINK_SELECTOR = 'a.sc-41178ccf-15.kKNiSw[href^="/novel/series/"]'; // 小说章节序号链接（包含系列名称和序号）
-    const NOVEL_SAVE_BUTTON_SECTION_SELECTOR = 'section.sc-cc664bf6-0.gGTiHy'; // 小说保存按钮插入位置
-    const NOVEL_CHAPTER_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列章节列表容器
-    const NOVEL_SERIES_LIST_SELECTOR = 'div.sc-794d489b-0.buoliH'; // 小说系列列表容器 (别名，与 NOVEL_CHAPTER_LIST_SELECTOR 相同)
-    const NOVEL_CHAPTER_LINK_SELECTOR = 'a[data-gtm-value]'; // 小说章节链接 (用于提取 novelId)
-    const NOVEL_CHAPTER_ITEM_CONTAINER_SELECTOR = 'div.sc-3a91e6c3-6.eJoreT'; // 小说章节列表项容器 (用于插入标记)
-    const NOVEL_CHAPTER_BADGE_CONTAINER_SELECTOR = 'div.sc-3a91e6c3-6.eJoreT'; // 小说章节标记容器 (与 NOVEL_CHAPTER_ITEM_CONTAINER_SELECTOR 相同)
-    const NOVEL_CHAPTER_REF_BUTTON_SELECTOR = 'button.sc-5d3311e8-0.iGxyRb'; // 小说章节列表参考按钮 (标记插在此之前)
-    const NOVEL_TAGS_CONTAINER_SELECTOR = 'footer.sc-41178ccf-4.RaSaf'; // 小说标签容器
-    const NOVEL_TAG_ITEM_SELECTOR = 'ul.sc-bb0ca45a-0.feaSLI li'; // 小说标签项（位于 footer 内的 ul 列表中）
-    const NOVEL_PUBLISH_DATE_CONTAINER_SELECTOR = 'div.sc-a5165759-0.lbROcw'; // 小说出版日期容器
-
-    // DOM Selectors - Misc
-    const SERIES_NAV_BUTTON_SELECTOR = 'div.sc-487e14c9-0.doUXUo'; // 漫画系列"加入追更"按钮 (用于判断是否为漫画系列)
-    const MANGA_SERIES_INFO_SELECTOR = 'div.sc-41178ccf-0.fwlXRJ a'; // 漫画系列信息 (用于提取章节序号)
-    const MANGA_SERIES_HEADER_SELECTOR = 'div.sc-e4a4c914-0.Hwtke'; // 漫画系列页面头部 (用于插入更新按钮)
-    const ARTWORK_BUTTON_CONTAINER_SELECTOR = 'div.sc-7fd477ff-3.jrRrCf'; // 作品详情页按钮容器
-    const ARTWORK_BUTTON_REF_SELECTOR = 'div.sc-7fd477ff-4.duoqQE'; // 作品详情页按钮插入参考点
 
     // ========== 特征识别函数 ==========
     
