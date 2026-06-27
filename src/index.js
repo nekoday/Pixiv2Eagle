@@ -3,8 +3,6 @@
     import {
         SETTING_KEYS,
         getFolderId,
-        getUseUploadDate,
-        getSaveDescription,
         getCreateSubFolder,
         getSaveByType,
         getDebugMode,
@@ -12,7 +10,6 @@
         getNovelSavePath,
         getNovelSaveFormat,
         forceRefreshEagleIndex,
-        bindEagleIndexRefresh,
     } from "./Tampermonkey/setting.js";
     import { registerMenuCommands } from "./Tampermonkey/menu.js";
     import { dbg, warn, err } from "./Tampermonkey/logger.js";
@@ -23,21 +20,12 @@
     import { insertSavedBadge } from "./shared/marking/insert-badge.js";
     import { gmFetch, gmFetchBinary, gmFetchText } from "./Tampermonkey/request.js";
     import {
-        loadEagleIndexCache,
-        saveEagleIndexCache,
-        clearEagleIndexCache,
-    } from "./Tampermonkey/storage.js";
-    import {
         EAGLE_SAVE_BUTTON_ID,
         EAGLE_OPEN_ITEM_BUTTON_ID,
         PIXIV_SECTION_CLASS,
         PIXIV_ARTIST_DIV_CLASS,
         USE_DOMESTIC_CDN,
-        EAGLE_ITEM_LIST_LIMIT,
-        EAGLE_ITEM_LIST_MAX_PAGES,
-        EAGLE_ITEM_INFO_CONCURRENCY,
         NOVEL_IMAGE_DOWNLOAD_DELAY_MS,
-        INDEX_EXPIRE_TIME,
     } from "./config/constants.js";
     import { createMonitorConfig } from "./config/monitor.js";
     import { observeUrlChanges } from "./routing/observe-url.js";
@@ -51,6 +39,13 @@
         setArtistMatcher,
     } from "./eagle/artist.js";
     import { getTypeFolderInfo, getOrCreateTypeFolder } from "./eagle/type-folder.js";
+    import {
+        getAllEagleItemsInFolder,
+        saveToEagle,
+        findSavedFolderForArtwork,
+        findSeriesFolderInArtist,
+    } from "./eagle/items.js";
+    import { invalidateEagleIndex, ensureEagleIndex } from "./eagle/index-cache.js";
     import {
         REC_SECTION_SELECTOR,
         REC_CONTAINER_SELECTOR,
@@ -383,270 +378,6 @@
         };
     }
 
-    // 查询 Eagle 中是否已保存指定作品
-    async function isArtworkSavedInEagle(artworkId, folderId) {
-        if (!folderId) {
-            return { saved: false, itemId: null };
-        }
-
-        const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
-        const limit = EAGLE_ITEM_LIST_LIMIT;
-
-        try {
-            let offset = 0;
-            let loopCount = 0;
-
-            while (loopCount < EAGLE_ITEM_LIST_MAX_PAGES) {
-                const params = new URLSearchParams({
-                    folders: folderId,
-                    limit: limit.toString(),
-                    offset: offset.toString(),
-                });
-
-                const data = await gmFetch(`http://localhost:41595/api/item/list?${params.toString()}`);
-                if (!data || !data.status) break;
-
-                const items = Array.isArray(data.data)
-                    ? data.data
-                    : Array.isArray(data.data?.items)
-                    ? data.data.items
-                    : [];
-
-                // 1. 快速检查：直接对比列表返回的 url
-                let matched = items.find((item) => item.url === artworkUrl);
-                
-                // 2. 深度检查：如果列表没找到，遍历调用 /api/item/info 获取详细信息对比
-                // (优化：解决列表接口可能返回不完整或缓存数据的问题)
-                if (!matched && items.length > 0) {
-                    const concurrency = EAGLE_ITEM_INFO_CONCURRENCY; // 并发数限制
-                    for (let i = 0; i < items.length; i += concurrency) {
-                        const chunk = items.slice(i, i + concurrency);
-                        const results = await Promise.all(chunk.map(async (item) => {
-                            try {
-                                const infoData = await gmFetch(`http://localhost:41595/api/item/info?id=${item.id}`);
-                                if (infoData && infoData.data && infoData.data.url === artworkUrl) {
-                                    return item;
-                                }
-                            } catch (e) {
-                                // 忽略单个获取失败
-                            }
-                            return null;
-                        }));
-                        
-                        matched = results.find(r => r);
-                        if (matched) break;
-                    }
-                }
-
-                if (matched) {
-                    return {
-                        saved: true,
-                        itemId: matched.id,
-                    };
-                }
-
-                if (items.length === 0) break; // 空页：避免继续翻页
-                if (items.length < limit) break;
-                offset += items.length;
-                loopCount += 1;
-            }
-        } catch (error) {
-            err("检测作品保存状态失败:", error);
-        }
-
-        return { saved: false, itemId: null };
-    }
-
-    // 在画师文件夹中查找指定系列文件夹（不创建）
-    function findSeriesFolderInArtist(artistFolder, artistId, seriesId) {
-        if (!artistFolder || !artistFolder.children) return null;
-
-        // 调试：打印所有子文件夹的描述，帮助排查匹配失败原因
-        dbg(`正在画师文件夹中查找系列 ${seriesId}，子文件夹数量: ${artistFolder.children.length}`);
-
-        return artistFolder.children.find((folder) => {
-            const description = (folder.description || "").trim();
-            // 宽松匹配：允许 http/https，允许末尾斜杠，允许描述中包含额外空白
-            // 同时也尝试匹配仅包含 URL 的情况
-            const urlPattern = new RegExp(`https?:\\/\\/www\\.pixiv\\.net\\/user\\/${artistId}\\/series\\/${seriesId}\\/?`);
-            const match = description.match(urlPattern);
-
-            if (description) {
-                dbg(`检查文件夹: ${folder.name}, 描述: ${description}, 匹配结果: ${!!match}`);
-            }
-
-            return !!match;
-        });
-    }
-
-    // 查找已保存作品所在的文件夹（包含系列与子文件夹描述）
-    async function findSavedFolderForArtwork(artworkId) {
-        try {
-            const details = await getArtworkDetails(artworkId);
-            const pixivFolderId = getFolderId();
-            const artistFolder = await findArtistFolder(pixivFolderId, details.userId);
-            if (!artistFolder) return null;
-
-            dbg(`开始查找作品: ${artworkId}, 标题: ${details.title}`);
-
-            // 检查当前页面是否为漫画系列（通过"加入追更列表"按钮判断）
-            const isSeriesPage = !!document.querySelector(SERIES_NAV_BUTTON_SELECTOR);
-
-            // 默认在画师文件夹检查，如有系列或当前为系列页面则进入系列文件夹
-            let currentFolder = artistFolder;
-            
-            // 如果开启了按类型保存，或者为了兼容性，检查类型文件夹
-            // 注意：这里我们不强制切换 currentFolder，而是增加搜索路径
-            // 但为了保持逻辑简单，我们先尝试定位到最具体的文件夹
-            
-            // 尝试定位系列文件夹
-            if (details.seriesNavData || isSeriesPage) {
-                const seriesId = details.seriesNavData?.seriesId || 
-                    (location.pathname.match(/\/series\/(\d+)/) || [])[1];
-                if (seriesId) {
-                    // 1. 在画师根目录下找系列
-                    let seriesFolder = findSeriesFolderInArtist(artistFolder, details.userId, seriesId);
-                    
-                    // 2. 如果没找到，且可能在类型文件夹下（如“漫画”文件夹）
-                    if (!seriesFolder && artistFolder.children) {
-                        const typeFolders = artistFolder.children.filter(c => ['illustrations', 'manga', 'novels'].includes(c.description));
-                        for (const tf of typeFolders) {
-                            seriesFolder = findSeriesFolderInArtist(tf, details.userId, seriesId);
-                            if (seriesFolder) break;
-                        }
-                    }
-                    
-                    if (seriesFolder) {
-                        currentFolder = seriesFolder;
-                    }
-                }
-            } else {
-                // 如果不是系列，可能是单幅插画，检查是否在类型文件夹中
-                // 优先检查类型文件夹
-                if (artistFolder.children) {
-                    const typeInfo = getTypeFolderInfo(details.illustType);
-                    const typeFolder = artistFolder.children.find(c => c.description === typeInfo.description);
-                    if (typeFolder) {
-                        // 如果找到了类型文件夹，我们应该检查它里面的 items
-                        // 但我们也应该检查画师根目录，以防旧数据
-                        // 这里我们暂时只切换 currentFolder 如果它确实包含该作品?
-                        // 不，isArtworkSavedInEagle 只检查一个文件夹。
-                        // 我们需要更灵活的检查。
-                        
-                        // 策略：先检查类型文件夹，再检查画师文件夹
-                        const savedInType = await isArtworkSavedInEagle(artworkId, typeFolder.id);
-                        if (savedInType.saved) {
-                            return { folder: typeFolder, itemId: savedInType.itemId };
-                        }
-                        // 如果没在类型文件夹找到，继续使用 artistFolder (currentFolder) 进行后续检查
-                    }
-                }
-            }
-
-            // 先检查当前文件夹中的作品
-            const savedResult = await isArtworkSavedInEagle(artworkId, currentFolder.id);
-            if (savedResult.saved) {
-                return { folder: currentFolder, itemId: savedResult.itemId || null };
-            }
-
-            // 再检查当前文件夹及其所有子文件夹中的 description 是否等于作品 ID（递归）
-            function findInSubfolders(folder) {
-                if (!folder || !folder.children) return null;
-                for (const child of folder.children) {
-                    const desc = (child.description || "").trim();
-                    if (desc === String(artworkId)) {
-                        return child;
-                    }
-                    // 递归查找更深层的子文件夹
-                    const found = findInSubfolders(child);
-                    if (found) return found;
-                }
-                return null;
-            }
-            const savedChild = findInSubfolders(currentFolder);
-            if (savedChild) {
-                return { folder: savedChild, itemId: null };
-            }
-
-            // 3. 尝试通过标题在画师文件夹及其子文件夹中搜索 (弥补上述检查可能遗漏的情况)
-            if (details.illustTitle) {
-                try {
-                    // 收集画师文件夹及其所有子文件夹的 ID
-                    const allFolderIds = [artistFolder.id];
-                    function collectFolderIds(folder) {
-                        if (folder.children) {
-                            folder.children.forEach(child => {
-                                allFolderIds.push(child.id);
-                                collectFolderIds(child);
-                            });
-                        }
-                    }
-                    collectFolderIds(artistFolder);
-
-                    // 移除标题中的序号部分，以便进行模糊匹配
-                    const searchKeyword = removeChapterNumber(details.illustTitle);
-
-                    dbg(`尝试通过标题搜索: "${searchKeyword}" (原标题: "${details.illustTitle}"), 搜索范围: ${allFolderIds.length} 个文件夹`);
-
-                    const params = new URLSearchParams({
-                        folders: allFolderIds.join(','),
-                        keyword: searchKeyword,
-                        limit: "50"
-                    });
-                    // 注意：Eagle 的 keyword 搜索是模糊匹配
-                    const searchUrl = `http://localhost:41595/api/item/list?${params.toString()}`;
-                    const data = await gmFetch(searchUrl);
-                    
-                    if (data && data.status === "success") {
-                        const items = Array.isArray(data.data) ? data.data : (data.data?.items || []);
-                        const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
-                        
-                        dbg(`标题搜索结果: 找到 ${items.length} 个项目`);
-
-                        // 优先检查 URL 匹配
-                        let matched = items.find(item => item.url === artworkUrl);
-                        
-                        // 如果没有直接匹配，尝试获取详细信息验证 (深度检查)
-                        if (!matched && items.length > 0) {
-                            dbg(`列表 URL 未匹配，尝试深度检查 ${items.length} 个项目...`);
-                            const concurrency = 5;
-                            for (let i = 0; i < items.length; i += concurrency) {
-                                const chunk = items.slice(i, i + concurrency);
-                                const results = await Promise.all(chunk.map(async (item) => {
-                                    try {
-                                        const infoData = await gmFetch(`http://localhost:41595/api/item/info?id=${item.id}`);
-                                        if (infoData && infoData.data && infoData.data.url === artworkUrl) {
-                                            return item;
-                                        }
-                                    } catch (e) { return null; }
-                                    return null;
-                                }));
-                                matched = results.find(r => r);
-                                if (matched) break;
-                            }
-                        }
-
-                        if (matched) {
-                            dbg(`✅ 通过标题搜索找到已保存作品:`, matched.id);
-                            return { folder: artistFolder, itemId: matched.id };
-                        } else {
-                            dbg(`❌ 标题搜索未找到匹配 URL 的作品`);
-                        }
-                    }
-                } catch (error) {
-                    err("通过标题搜索失败:", error);
-                }
-            } else {
-                dbg(`❌ 无法获取作品标题，跳过标题搜索`);
-            }
-
-            return null;
-        } catch (error) {
-            err("定位已保存作品文件夹失败:", error);
-            return null;
-        }
-    }
-
     // 获取作品 ID
     function getArtworkId() {
         const match = location.pathname.match(/^\/artworks\/(\d+)/);
@@ -720,7 +451,7 @@
     }
 
     // 获取作品详细信息
-    async function getArtworkDetails(artworkId) {
+    export async function getArtworkDetails(artworkId) {
         try {
             const [basicInfo, pagesInfo] = await Promise.all([
                 gmFetch(`https://www.pixiv.net/ajax/illust/${artworkId}?lang=zh`, {
@@ -892,7 +623,7 @@
     }
 
     // 将动图转换为 GIF Blob
-    async function convertUgoiraToGifBlob(artworkId) {
+    export async function convertUgoiraToGifBlob(artworkId) {
         // 动态加载 fflate（解压 zip）库到用户脚本沙箱
         async function ensureFflateLoaded() {
             if (window.fflate) return;
@@ -980,7 +711,7 @@
         return blob;
     }
 
-    async function blobToDataURL(blob) {
+    export async function blobToDataURL(blob) {
         return await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = () => resolve(reader.result);
@@ -1117,67 +848,6 @@
         }
         
         return paths;
-    }
-
-    // 保存图片到 Eagle
-    async function saveToEagle(imageUrls, folderId, details, artworkId) {
-        async function getUgoiraUrl(artworkId) {
-            const gifBlob = await convertUgoiraToGifBlob(artworkId);
-            const [base64, dataURL] = await (async () => {
-                const du = await blobToDataURL(gifBlob);
-                const comma = du.indexOf(",");
-                return [du.substring(comma + 1), du];
-            })();
-            return dataURL;
-        }
-
-        // 如果是动图（ugoira），先转换为 GIF 并保存
-        const isUgoira = details.illustType === 2;
-        if (isUgoira) {
-            imageUrls = [await getUgoiraUrl(artworkId)];
-        }
-
-        const baseTitle = details.illustTitle;
-        const isMultiPage = imageUrls.length > 1;
-        const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
-
-        // 根据设置决定是否使用投稿时间
-        const useUploadDate = getUseUploadDate();
-        const modificationTime = useUploadDate ? new Date(details.uploadDate).getTime() : undefined;
-
-        // 根据设置决定是否保存描述
-        const shouldSaveDescription = getSaveDescription();
-        const annotation = shouldSaveDescription ? details.description : undefined;
-
-        // 批量添加图片
-        const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-                items: imageUrls.map((url, index) => ({
-                    url,
-                    name: isMultiPage ? `${baseTitle}_${index}` : baseTitle,
-                    website: artworkUrl,
-                    tags: details.tags,
-                    ...(annotation && { annotation }),
-                    ...(modificationTime && { modificationTime }),
-                    ...(!isUgoira && {
-                        headers: {
-                            referer: "https://www.pixiv.net/",
-                        },
-                    }),
-                })),
-                folderId,
-            }),
-        });
-
-        if (!data.status) {
-            throw new Error("保存图片失败");
-        }
-
-        return data.data;
     }
 
     // 保存当前作品到 Eagle
@@ -1836,28 +1506,6 @@
         container.style.width = '100%';
     }
 
-    // 获取指定 Eagle 文件夹下所有 items（分页）
-    async function getAllEagleItemsInFolder(folderId) {
-        const limit = 200;
-        let offset = 0;
-        const items = [];
-
-        while (true) {
-            const params = new URLSearchParams({ folders: folderId, limit: String(limit), offset: String(offset) });
-            const data = await gmFetch(`http://localhost:41595/api/item/list?${params.toString()}`);
-            if (!data || !data.status) break;
-
-            const pageItems = Array.isArray(data.data) ? data.data : Array.isArray(data.data?.items) ? data.data.items : [];
-            if (!pageItems || pageItems.length === 0) break;
-
-            items.push(...pageItems);
-            if (pageItems.length < limit) break;
-            offset += pageItems.length;
-        }
-
-        return items;
-    }
-
     // 在画师作品列表页面标注已保存的作品（在作品标题前添加 ✅）
     async function markSavedInArtistList() {
         // 清理旧的 Observer，防止重复监听
@@ -2195,171 +1843,6 @@
     let currentRecObserver = null;
     let isRecAreaInitializing = false;
     let currentRecUrl = ""; // 记录当前监控的 URL，防止重复初始化
-
-    // 索引序列化：将 Map 转换为可存储的普通对象
-    function serializeIndex(index) {
-        const serialized = {};
-        for (const [uid, data] of index.entries()) {
-            serialized[uid] = {
-                id: data.id,
-                pids: Array.from(data.pids) // Set 转换为 Array
-            };
-        }
-        return serialized;
-    }
-
-    // 索引反序列化：将存储的数据恢复为 Map
-    function deserializeIndex(data) {
-        const index = new Map();
-        for (const [uid, value] of Object.entries(data)) {
-            index.set(uid, {
-                id: value.id,
-                pids: new Set(value.pids) // Array 转换为 Set
-            });
-        }
-        return index;
-    }
-
-    // 使索引失效（清除缓存）
-    function invalidateEagleIndex() {
-        // 清除持久化存储
-        clearEagleIndexCache();
-        // 清除 window 对象上的索引
-        window.__pixiv2eagle_globalEagleIndex = null;
-        window.__pixiv2eagle_eagleIndexLoadingPromise = null;
-    }
-
-    // 使用 window 对象存储索引，避免页面导航时被重置
-    if (typeof window.__pixiv2eagle_globalEagleIndex === 'undefined') {
-        window.__pixiv2eagle_globalEagleIndex = null;
-    }
-    if (typeof window.__pixiv2eagle_eagleIndexLoadingPromise === 'undefined') {
-        window.__pixiv2eagle_eagleIndexLoadingPromise = null;
-    }
-
-    // 异步构建 Eagle 索引 (单例模式)
-    async function ensureEagleIndex(forceRefresh = false) {
-        // 如果强制刷新，清除缓存
-        if (forceRefresh) {
-            invalidateEagleIndex();
-        }
-
-        // 优先使用内存中的索引
-        if (window.__pixiv2eagle_globalEagleIndex) return window.__pixiv2eagle_globalEagleIndex;
-        if (window.__pixiv2eagle_eagleIndexLoadingPromise) return window.__pixiv2eagle_eagleIndexLoadingPromise;
-
-        // 尝试从持久化存储加载索引
-        const pixivFolderId = getFolderId();
-        if (!forceRefresh && pixivFolderId) {
-            try {
-                const cachedData = loadEagleIndexCache();
-                if (cachedData && cachedData.index && cachedData.expireTime && cachedData.pixivFolderId) {
-                    const now = Date.now();
-                    // 检查是否过期且文件夹ID匹配
-                    if (now < cachedData.expireTime && cachedData.pixivFolderId === pixivFolderId) {
-                        // 索引未过期，反序列化并返回
-                        const index = deserializeIndex(cachedData.index);
-                        window.__pixiv2eagle_globalEagleIndex = index;
-                        dbg(`从缓存加载 Eagle 索引，包含 ${index.size} 位画师`);
-                        return index;
-                    } else {
-                        // 索引已过期或文件夹ID不匹配，清除缓存
-                        if (now >= cachedData.expireTime) {
-                            dbg("索引已过期，重新构建...");
-                        } else {
-                            dbg("文件夹ID不匹配，重新构建索引...");
-                        }
-                        invalidateEagleIndex();
-                    }
-                }
-            } catch (e) {
-                warn("加载缓存索引失败:", e);
-                invalidateEagleIndex();
-            }
-        }
-
-        dbg("正在构建全局 Eagle 索引...");
-        window.__pixiv2eagle_eagleIndexLoadingPromise = (async () => {
-            const index = new Map();
-            if (!pixivFolderId) return index;
-
-            try {
-                const folderList = await gmFetch("http://localhost:41595/api/folder/list");
-                if (folderList.status && Array.isArray(folderList.data)) {
-                    const findFolder = (folders, id) => {
-                        for (const f of folders) {
-                            if (f.id === id) return f;
-                            if (f.children) {
-                                const res = findFolder(f.children, id);
-                                if (res) return res;
-                            }
-                        }
-                        return null;
-                    };
-                    const root = findFolder(folderList.data, pixivFolderId);
-
-                    if (root && root.children) {
-                        for (const artistFolder of root.children) {
-                            const desc = artistFolder.description || "";
-                            const match = desc.match(/pid\s*=\s*(\d+)/);
-                            if (match) {
-                                const artistUid = match[1];
-                                const pids = new Set();
-
-                                // 递归遍历所有子孙节点查找 PID (支持类型文件夹、系列文件夹等嵌套结构)
-                                const traverse = (nodes) => {
-                                    for (const node of nodes) {
-                                        const subDesc = (node.description || "").trim();
-                                        // 只要备注是纯数字，就认为是作品 PID
-                                        if (subDesc && /^\d+$/.test(subDesc)) {
-                                            pids.add(subDesc);
-                                        }
-                                        // 继续递归子文件夹
-                                        if (node.children && node.children.length > 0) {
-                                            traverse(node.children);
-                                        }
-                                    }
-                                };
-
-                                if (artistFolder.children) {
-                                    traverse(artistFolder.children);
-                                }
-                                index.set(artistUid, { id: artistFolder.id, pids });
-                            }
-                        }
-                    }
-                    dbg(`全局 Eagle 索引构建完成，包含 ${index.size} 位画师`);
-
-                    // 持久化索引到存储
-                    try {
-                        const expireTime = Date.now() + INDEX_EXPIRE_TIME;
-                        const serializedIndex = serializeIndex(index);
-                        saveEagleIndexCache({
-                            index: serializedIndex,
-                            expireTime: expireTime,
-                            pixivFolderId: pixivFolderId
-                        });
-                        dbg(`索引已保存，将在 ${new Date(expireTime).toLocaleString()} 过期`);
-                    } catch (e) {
-                        warn("保存索引失败:", e);
-                    }
-                }
-            } catch (e) {
-                err("构建 Eagle 索引失败:", e);
-            }
-            return index;
-        })();
-
-        try {
-            window.__pixiv2eagle_globalEagleIndex = await window.__pixiv2eagle_eagleIndexLoadingPromise;
-        } catch (e) {
-            err(e);
-            window.__pixiv2eagle_eagleIndexLoadingPromise = null; // 允许重试
-        }
-        return window.__pixiv2eagle_globalEagleIndex;
-    }
-
-    bindEagleIndexRefresh({ invalidateEagleIndex, ensureEagleIndex });
 
     // 在推荐区域标记已保存作品
     async function markSavedInRecommendationArea() {
