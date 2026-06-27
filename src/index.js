@@ -1,6 +1,7 @@
     "use strict";
 
     import { SETTING_KEYS } from "./Tampermonkey/setting.js";
+    import { dbg, warn, err } from "./Tampermonkey/logger.js";
     import { gmFetch, gmFetchBinary, gmFetchText } from "./Tampermonkey/request.js";
     import {
         EAGLE_SAVE_BUTTON_ID,
@@ -326,17 +327,6 @@
     // 获取调试模式状态
     function getDebugMode() {
         return GM_getValue("debugMode", false);
-    }
-
-    // 日志 helper：统一 [Pixiv2Eagle] 前缀与 debug 门控（syntax 规则 4.1 / 4.2）
-    function dbg(msg, ...args) {
-        if (getDebugMode()) console.log("[Pixiv2Eagle]", msg, ...args);
-    }
-    function warn(msg, ...args) {
-        console.warn("[Pixiv2Eagle]", msg, ...args);
-    }
-    function err(msg, ...args) {
-        console.error("[Pixiv2Eagle]", msg, ...args);
     }
 
     // 获取是否自动检测作品保存状态
