@@ -23,6 +23,11 @@
     import { showToast, showMessage } from "./ui/toast.js";
     import { gmFetch, gmFetchBinary, gmFetchText } from "./Tampermonkey/request.js";
     import {
+        loadEagleIndexCache,
+        saveEagleIndexCache,
+        clearEagleIndexCache,
+    } from "./Tampermonkey/storage.js";
+    import {
         EAGLE_SAVE_BUTTON_ID,
         EAGLE_OPEN_ITEM_BUTTON_ID,
         PIXIV_SECTION_CLASS,
@@ -261,18 +266,11 @@
     }
 
     // 注册菜单命令
-    GM_registerMenuCommand("📁 设置 Pixiv 文件夹 ID", setFolderId);
-    GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", makeToggle({ key: "useUploadDate", label: "使用投稿时间作为添加日期" }));
-    GM_registerMenuCommand("🕗 切换：保存作品描述", makeToggle({ key: "saveDescription", label: "保存作品描述", defaultValue: true }));
-    GM_registerMenuCommand("🗂️ 切换：为多页作品创建子文件夹", toggleCreateSubFolder);
-    GM_registerMenuCommand("🗂️ 切换：按类型保存", makeToggle({ key: "saveByType", label: "按类型保存" }));
-    GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
-    GM_registerMenuCommand("🔎 切换：自动检测作品保存状态", makeToggle({ key: "autoCheckSavedStatus", label: "自动检测作品保存状态", onText: "开启", offText: "关闭" }));
-    GM_registerMenuCommand("🔄 强制更新 Eagle 索引", forceRefreshEagleIndex);
-    GM_registerMenuCommand("📂 设置小说保存路径", setNovelSavePath);
-    GM_registerMenuCommand("📚 切换：小说保存格式 (TXT/MD/EPUB)", setNovelSaveFormat);
-    GM_registerMenuCommand("🧪 切换：调试模式", makeToggle({ key: "debugMode", label: "调试模式" }));
-    GM_registerMenuCommand("🧪 设置画师文件夹名称模板", setArtistMatcher);
+    registerMenuCommands({
+        saveCurrentArtwork,
+        forceRefreshEagleIndex,
+        setArtistMatcher,
+    });
 
     class ArtistMatcher {
         constructor(template) {
@@ -2866,7 +2864,7 @@
     // 使索引失效（清除缓存）
     function invalidateEagleIndex() {
         // 清除持久化存储
-        GM_setValue("eagleIndex", null);
+        clearEagleIndexCache();
         // 清除 window 对象上的索引
         window.__pixiv2eagle_globalEagleIndex = null;
         window.__pixiv2eagle_eagleIndexLoadingPromise = null;
@@ -2895,7 +2893,7 @@
         const pixivFolderId = getFolderId();
         if (!forceRefresh && pixivFolderId) {
             try {
-                const cachedData = GM_getValue("eagleIndex", null);
+                const cachedData = loadEagleIndexCache();
                 if (cachedData && cachedData.index && cachedData.expireTime && cachedData.pixivFolderId) {
                     const now = Date.now();
                     // 检查是否过期且文件夹ID匹配
@@ -2977,7 +2975,7 @@
                     try {
                         const expireTime = Date.now() + INDEX_EXPIRE_TIME;
                         const serializedIndex = serializeIndex(index);
-                        GM_setValue("eagleIndex", {
+                        saveEagleIndexCache({
                             index: serializedIndex,
                             expireTime: expireTime,
                             pixivFolderId: pixivFolderId
