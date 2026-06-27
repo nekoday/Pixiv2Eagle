@@ -475,20 +475,6 @@
         };
     }
 
-    /**
-     * 移除标题中的序号部分（#数字 或 第数字话）
-     * @param {string} title - 原始标题
-     * @returns {string} 处理后的标题
-     */
-    function removeChapterNumber(title) {
-        const numMatch = title.match(/#(\d+)/) || title.match(/第(\d+)[话話]/) || title.match(/^(\d+)$/);
-        if (numMatch) {
-            const cleaned = title.replace(numMatch[0], "").trim();
-            return cleaned || title; // 如果清理后为空，返回原标题
-        }
-        return title;
-    }
-
     // 检查 Eagle 是否运行
     async function checkEagle() {
         try {
@@ -2456,51 +2442,16 @@
             // 同时支持系列缩略图容器：sc-e83d358-1（包含 sc-f44a0b30-9 cvPXKv）
             // 插入标记的函数：直接在指定的容器中插入勾号
             const insertBadgeToContainer = (container, matchInfo = {}) => {
-                if (!container) return;
-                
-                // 防止重复插入
-                if (container.dataset.eagleSaved === '1') return;
-
-                // 确保容器为定位上下文
-                try {
-                    const cs = window.getComputedStyle(container);
-                    if (!cs || cs.position === 'static') {
-                        container.style.position = 'relative';
-                    }
-                    // 确保 overflow 不会隐藏徽章
-                    if (container.style.overflow !== 'visible') {
-                         container.style.overflow = 'visible';
-                    }
-                } catch (e) {
-                    // ignore
+                if (insertSavedBadge(container, {
+                    zIndex: "2147483647",
+                    fontSize: "18px",
+                    padding: "2px 6px",
+                    large: true,
+                    markContainer: true,
+                    ensureOverflowVisible: true,
+                })) {
+                    log('徽章已插入:', matchInfo.artworkId);
                 }
-
-                const badge = document.createElement('span');
-                badge.className = 'eagle-saved-badge';
-                badge.textContent = '✅';
-                badge.setAttribute('aria-hidden', 'true');
-                // 样式：左下角浮动
-                badge.style.position = 'absolute';
-                badge.style.left = '6px';
-                badge.style.bottom = '6px';
-                badge.style.zIndex = '2147483647';
-                badge.style.fontSize = '18px';
-                badge.style.lineHeight = '1';
-                badge.style.pointerEvents = 'none';
-                badge.style.backgroundColor = 'rgba(255,255,255,0.95)';
-                badge.style.padding = '2px 6px';
-                badge.style.borderRadius = '4px';
-                badge.style.fontWeight = 'bold';
-                badge.style.display = 'flex';
-                badge.style.alignItems = 'center';
-                badge.style.justifyContent = 'center';
-                badge.style.minWidth = '24px';
-                badge.style.minHeight = '24px';
-
-                container.appendChild(badge);
-                container.dataset.eagleSaved = '1';
-
-                log('徽章已插入:', matchInfo.artworkId);
             };
 
             // 首次批量标注
@@ -2888,30 +2839,7 @@
 
                 if (!target) return false;
 
-                if (target.querySelector('.eagle-saved-badge')) return true;
-
-                const badge = document.createElement('span');
-                badge.className = 'eagle-saved-badge';
-                badge.textContent = '✅';
-                badge.setAttribute('aria-hidden', 'true');
-                badge.style.position = 'absolute';
-                badge.style.left = '6px';
-                badge.style.bottom = '6px';
-                badge.style.zIndex = '10';
-                badge.style.fontSize = '14px';
-                badge.style.lineHeight = '1';
-                badge.style.pointerEvents = 'none';
-                badge.style.backgroundColor = 'rgba(255,255,255,0.95)';
-                badge.style.padding = '2px 4px';
-                badge.style.borderRadius = '4px';
-                badge.style.fontWeight = 'bold';
-                
-                const style = window.getComputedStyle(target);
-                if (style.position === 'static') {
-                    target.style.position = 'relative';
-                }
-                target.appendChild(badge);
-                return true;
+                return insertSavedBadge(target);
             };
 
             // 4. 扫描逻辑
