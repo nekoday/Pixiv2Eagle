@@ -2,7 +2,7 @@
 
 import { gmFetch } from "../Tampermonkey/request.js";
 import { err } from "../Tampermonkey/logger.js";
-import { getArtistMatcher } from "../index.js";
+import { getArtistMatcher } from "./artist.js";
 
 // 创建 Eagle 文件夹
 export async function createEagleFolder(folderName, parentId = null, description = "") {
