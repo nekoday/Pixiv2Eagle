@@ -3,22 +3,18 @@
     import {
         SETTING_KEYS,
         getFolderId,
-        setFolderId,
         getUseUploadDate,
         getSaveDescription,
-        makeToggle,
-        toggleCreateSubFolder,
         getCreateSubFolder,
         getSaveByType,
         getDebugMode,
         getAutoCheckSavedStatus,
         getNovelSavePath,
-        setNovelSavePath,
         getNovelSaveFormat,
-        setNovelSaveFormat,
         forceRefreshEagleIndex,
         bindEagleIndexRefresh,
     } from "./Tampermonkey/setting.js";
+    import { registerMenuCommands } from "./Tampermonkey/menu.js";
     import { dbg, warn, err } from "./Tampermonkey/logger.js";
     import { showToast, showMessage } from "./ui/toast.js";
     import { gmFetch, gmFetchBinary, gmFetchText } from "./Tampermonkey/request.js";
