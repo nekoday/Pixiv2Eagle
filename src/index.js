@@ -39,6 +39,7 @@
         NOVEL_IMAGE_DOWNLOAD_DELAY_MS,
         INDEX_EXPIRE_TIME,
     } from "./config/constants.js";
+    import { createMonitorConfig } from "./config/monitor.js";
     import {
         REC_SECTION_SELECTOR,
         REC_CONTAINER_SELECTOR,
@@ -4948,35 +4949,13 @@ p {
         addMoveToSubfolderButton();
     }
 
-    const monitorConfig = [
-        {
-            urlSuffix: "/artworks",
-            observeID: EAGLE_SAVE_BUTTON_ID,
-            handler: () => {
-                addButton();
-                markSavedInRecommendationArea();
-            },
-        },
-        {
-            urlSuffix: "/novel/show.php",
-            observeID: EAGLE_SAVE_BUTTON_ID,
-            handler: () => {
-                addNovelButton();
-            }
-        },
-        {
-            urlSuffix: "/novel/series",
-            observeID: null,
-            handler: () => {
-                markSavedInNovelSeries();
-            }
-        },
-        {
-            urlSuffix: "/user",
-            observeID: null,
-            handler: debouncedMarkSavedInArtistList,
-        },
-    ];
+    const monitorConfig = createMonitorConfig({
+        addButton,
+        markSavedInRecommendationArea,
+        addNovelButton,
+        markSavedInNovelSeries,
+        debouncedMarkSavedInArtistList,
+    });
 
     // 启动脚本
     try {
