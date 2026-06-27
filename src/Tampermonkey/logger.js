@@ -1,10 +1,6 @@
 "use strict";
 
-import { SETTING_KEYS, SETTING_DEFAULTS } from "./setting.js";
-
-function getDebugMode() {
-    return GM_getValue(SETTING_KEYS.DEBUG_MODE, SETTING_DEFAULTS[SETTING_KEYS.DEBUG_MODE]);
-}
+import { getDebugMode } from "./setting.js";
 
 export function dbg(msg, ...args) {
     if (getDebugMode()) console.log("[Pixiv2Eagle]", msg, ...args);
