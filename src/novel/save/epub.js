@@ -2,7 +2,7 @@
 
 import { err } from "../../Tampermonkey/logger.js";
 import { gmFetchBinary } from "../../Tampermonkey/request.js";
-import { ensureJSZipLoaded } from "../../artwork/ugoira/lib-loader.js";
+import { ensureJSZipLoaded } from "../../shared/lib-loader.js";
 
 export function createEPUBProgressWindow() {
         const overlay = document.createElement('div');
