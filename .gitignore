@@ -1,2 +1,38 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+*.js.map
+
+# OS
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+
+# Git worktrees
+.worktrees/
+
+# Cursor local state (rules remain tracked)
+.cursor/hooks/
+.cursor/settings.json
+.cursorignore
+
+# Superpowers plans/specs (local agent workflow)
+docs/superpowers/

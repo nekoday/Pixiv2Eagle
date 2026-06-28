@@ -1,0 +1,26 @@
+---
+description: 项目 Cursor Skill 索引与使用时机；指向 AGENTS.md 为权威约定
+alwaysApply: true
+---
+
+# 项目 Skill 索引
+
+权威项目约定见 [`AGENTS.md`](../AGENTS.md)。以下 skill 位于 `.cursor/skills/`，Agent **MUST** 在对应场景读取完整 `SKILL.md`。
+
+| Skill | 用途 | MUST 读取时机 |
+|-------|------|--------------|
+| `pixiv2eagle-verify` | build + Tampermonkey 手测 7 项清单 | 代码改动收尾；用户问如何验证；claim 完成前 |
+| `pixiv-selectors` | `config/selectors/` 结构与 fallback | Pixiv UI 改版；按钮/标记消失；改 DOM 交互 |
+| `eagle-api-patterns` | Eagle API、文件夹层级、索引 | 新增/修改 Eagle 集成、文件夹或索引逻辑 |
+| `module-placement` | 域边界与 bootstrap 职责 | 新功能；拆文件；不确定代码放哪 |
+
+## 与领域规则的关系
+
+- Skill 提供**工作流与项目模式**；领域细节以 `.cursor/rules/*.mdc` 为准
+- 修改 `src/**/*.js` 时另须读 `syntax.mdc`
+- 修改 Pixiv 交互时另须读 `pixiv.mdc`（配合 `pixiv-selectors` skill）
+- 修改 Eagle 通信时另须读 `eagle.mdc`（配合 `eagle-api-patterns` skill）
+
+## 验证底线
+
+本仓库无 test/lint。**MUST** `npm run build` 通过 + 手测相关项，方可 claim 完成。
