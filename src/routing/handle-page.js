@@ -35,6 +35,7 @@ export function handlePageChange(monitorInfo) {
     }
 
     // 设置一个观察器来监视 DOM 变化
+    let intervalId;
     const observer = new MutationObserver((mutations, obs) => {
         // 检查是否存在指定 ID 的元素，若不存在则添加
         const button = document.getElementById(monitorInfo.observeID);
@@ -54,7 +55,6 @@ export function handlePageChange(monitorInfo) {
         subtree: true,
     });
 
-    let intervalId;
     // 同时设置一个间隔检查
     let checkCount = 0;
     intervalId = setInterval(() => {
