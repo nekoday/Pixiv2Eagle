@@ -6,10 +6,9 @@ import {
     REC_CONTAINER_SELECTOR,
     REC_WORK_LINK_SELECTOR,
     REC_ARTIST_LINK_SELECTOR,
-    REC_THUMBNAIL_SELECTOR,
-    REC_THUMBNAIL_FALLBACK_SELECTOR,
 } from "../../config/selectors/index.js";
 import { insertSavedBadge } from "../../shared/marking/insert-badge.js";
+import { resolveThumbnailAnchor } from "../../shared/marking/resolve-thumbnail-anchor.js";
 import { ensureEagleIndex } from "../../eagle/index-cache.js";
 
 let currentRecObserver = null;
@@ -113,19 +112,8 @@ export async function markSavedInRecommendationArea() {
         };
 
         const addBadge = (li, pid) => {
-            let target = li.querySelector(REC_THUMBNAIL_SELECTOR);
-            if (!target) target = li.querySelector("div.sc-f44a0b30-9");
-
-            if (!target) target = li.querySelector(REC_THUMBNAIL_FALLBACK_SELECTOR);
-            if (!target) target = li.querySelector("div.sc-fab8f26d-3");
-
-            if (!target) {
-                const img = li.querySelector("img");
-                if (img) target = img.parentElement;
-            }
-
+            const target = resolveThumbnailAnchor(li, { context: "rec" });
             if (!target) return false;
-
             return insertSavedBadge(target);
         };
 
