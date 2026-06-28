@@ -54,9 +54,10 @@ export function handlePageChange(monitorInfo) {
         subtree: true,
     });
 
+    let intervalId;
     // 同时设置一个间隔检查
     let checkCount = 0;
-    const intervalId = setInterval(() => {
+    intervalId = setInterval(() => {
         const button = document.getElementById(monitorInfo.observeID);
         if (!button) {
             monitorInfo.handler();
