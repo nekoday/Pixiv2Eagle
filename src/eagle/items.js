@@ -14,12 +14,7 @@ import { findArtistFolder } from "./artist.js";
 import { getTypeFolderInfo } from "./type-folder.js";
 import { getArtworkDetails } from "../artwork/details.js";
 import { convertUgoiraToGifBlob, blobToDataURL } from "../artwork/ugoira/convert.js";
-import {
-    findMangaSeriesFolderInArtistTree,
-    findSeriesFolderInArtist,
-} from "../manga/series/folder.js";
-
-export { findSeriesFolderInArtist };
+import { findMangaSeriesFolderInArtistTree } from "../manga/series/folder.js";
 
 // 查询 Eagle 中是否已保存指定作品
 export async function isArtworkSavedInEagle(artworkId, folderId) {
