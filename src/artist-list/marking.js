@@ -1,7 +1,7 @@
 "use strict";
 
-import { getFolderId, getDebugMode } from "../Tampermonkey/setting.js";
-import { dbg, err } from "../Tampermonkey/logger.js";
+import { getFolderId, getDebugMode } from "../tampermonkey/setting.js";
+import { dbg, err } from "../tampermonkey/logger.js";
 import { waitForElement } from "../ui/dom.js";
 import { insertSavedBadge } from "../shared/marking/insert-badge.js";
 import { findArtistFolder } from "../eagle/artist.js";

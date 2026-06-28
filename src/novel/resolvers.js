@@ -1,6 +1,6 @@
 "use strict";
 
-import { dbg, warn } from "../Tampermonkey/logger.js";
+import { dbg, warn } from "../tampermonkey/logger.js";
 import {
     NOVEL_TITLE_SELECTOR,
     NOVEL_COVER_SELECTOR,

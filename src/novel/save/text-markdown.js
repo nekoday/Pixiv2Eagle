@@ -1,8 +1,8 @@
 "use strict";
 
-import { err } from "../../Tampermonkey/logger.js";
-import { gmFetch } from "../../Tampermonkey/request.js";
-import { getNovelSavePath } from "../../Tampermonkey/setting.js";
+import { err } from "../../tampermonkey/logger.js";
+import { gmFetch } from "../../tampermonkey/request.js";
+import { getNovelSavePath } from "../../tampermonkey/setting.js";
 import { showMessage } from "../../ui/toast.js";
 import { combineNovelContent } from "../content.js";
 import { downloadNovelFiles, getFilePaths } from "../download.js";

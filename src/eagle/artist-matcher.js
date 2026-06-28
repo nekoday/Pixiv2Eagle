@@ -1,6 +1,6 @@
 "use strict";
 
-import { SETTING_KEYS, SETTING_DEFAULTS } from "../Tampermonkey/setting.js";
+import { SETTING_KEYS, SETTING_DEFAULTS } from "../tampermonkey/setting.js";
 
 class ArtistMatcher {
     constructor(template) {

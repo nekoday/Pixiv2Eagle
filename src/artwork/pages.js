@@ -1,7 +1,7 @@
 "use strict";
 
-import { err } from "../Tampermonkey/logger.js";
-import { gmFetch } from "../Tampermonkey/request.js";
+import { err } from "../tampermonkey/logger.js";
+import { gmFetch } from "../tampermonkey/request.js";
 
 // 获取作品页面信息
 export async function getArtworkPages(artworkId) {

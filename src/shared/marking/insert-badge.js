@@ -55,7 +55,6 @@ export function insertSavedBadge(container, options = {}) {
     badge.style.fontSize = fontSize;
     badge.style.lineHeight = "1";
     badge.style.pointerEvents = "none";
-    badge.style.backgroundColor = "rgba(255,255,255,0.95)";
     badge.style.padding = padding;
     badge.style.borderRadius = "4px";
     badge.style.fontWeight = "bold";

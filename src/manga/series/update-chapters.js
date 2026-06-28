@@ -1,8 +1,8 @@
 "use strict";
 
-import { getFolderId } from "../../Tampermonkey/setting.js";
-import { dbg, err, warn } from "../../Tampermonkey/logger.js";
-import { gmFetch } from "../../Tampermonkey/request.js";
+import { getFolderId } from "../../tampermonkey/setting.js";
+import { dbg, err, warn } from "../../tampermonkey/logger.js";
+import { gmFetch } from "../../tampermonkey/request.js";
 import { removeChapterNumber } from "../../shared/chapter-title.js";
 import { SERIES_PAGE_LIST_SELECTOR } from "../../config/selectors/index.js";
 import { checkEagle } from "../../eagle/client.js";

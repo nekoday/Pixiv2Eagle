@@ -1,6 +1,6 @@
 "use strict";
 
-import { dbg, err } from "../../Tampermonkey/logger.js";
+import { dbg, err } from "../../tampermonkey/logger.js";
 import {
     REC_SECTION_SELECTOR,
     REC_CONTAINER_SELECTOR,

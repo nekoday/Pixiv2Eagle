@@ -1,108 +1,48 @@
 "use strict";
 
-import { err } from "../../Tampermonkey/logger.js";
-import { gmFetchBinary } from "../../Tampermonkey/request.js";
+import { err } from "../../tampermonkey/logger.js";
+import { gmFetchBinary } from "../../tampermonkey/request.js";
 import { ensureJSZipLoaded } from "../../shared/lib-loader.js";
 
 export function createEPUBProgressWindow() {
-        const overlay = document.createElement('div');
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 999999;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        `;
+        const overlay = document.createElement("div");
+        overlay.className = "p2e-modal-overlay";
 
-        const modal = document.createElement('div');
-        modal.style.cssText = `
-            background: white;
-            border-radius: 8px;
-            padding: 24px;
-            min-width: 400px;
-            max-width: 600px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-        `;
+        const modal = document.createElement("div");
+        modal.className = "p2e-modal";
 
-        const title = document.createElement('h3');
-        title.textContent = '正在生成 EPUB 电子书';
-        title.style.cssText = `
-            margin: 0 0 16px 0;
-            font-size: 18px;
-            font-weight: 600;
-        `;
+        const title = document.createElement("h3");
+        title.textContent = "正在生成 EPUB 电子书";
+        title.className = "p2e-modal__title";
 
-        const progressContainer = document.createElement('div');
-        progressContainer.style.cssText = `
-            margin-bottom: 16px;
-        `;
+        const progressContainer = document.createElement("div");
+        progressContainer.className = "p2e-modal__progress-container";
 
-        const progressBar = document.createElement('div');
-        progressBar.style.cssText = `
-            width: 100%;
-            height: 8px;
-            background: #e0e0e0;
-            border-radius: 4px;
-            overflow: hidden;
-            margin-bottom: 8px;
-        `;
+        const progressBar = document.createElement("div");
+        progressBar.className = "p2e-modal__progress-track";
 
-        const progressFill = document.createElement('div');
-        progressFill.style.cssText = `
-            height: 100%;
-            width: 0%;
-            background: #4CAF50;
-            transition: width 0.3s ease;
-        `;
+        const progressFill = document.createElement("div");
+        progressFill.className = "p2e-modal__progress-fill";
         progressBar.appendChild(progressFill);
 
-        const progressText = document.createElement('div');
-        progressText.style.cssText = `
-            font-size: 14px;
-            color: #666;
-            margin-top: 8px;
-        `;
-        progressText.textContent = '初始化...';
+        const progressText = document.createElement("div");
+        progressText.className = "p2e-modal__progress-text";
+        progressText.textContent = "初始化...";
 
         progressContainer.appendChild(progressBar);
         progressContainer.appendChild(progressText);
 
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.cssText = `
-            display: flex;
-            justify-content: flex-end;
-            margin-top: 16px;
-        `;
+        const buttonContainer = document.createElement("div");
+        buttonContainer.className = "p2e-modal__actions";
 
         let cancelled = false;
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = '终止';
-        cancelButton.style.cssText = `
-            padding: 8px 16px;
-            background: #f44336;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-        `;
-        cancelButton.onmouseover = () => {
-            cancelButton.style.background = '#d32f2f';
-        };
-        cancelButton.onmouseout = () => {
-            cancelButton.style.background = '#f44336';
-        };
+        const cancelButton = document.createElement("button");
+        cancelButton.textContent = "终止";
+        cancelButton.className = "p2e-modal__cancel-btn";
         cancelButton.onclick = () => {
             cancelled = true;
-            progressText.textContent = '正在终止...';
+            progressText.textContent = "正在终止...";
             cancelButton.disabled = true;
-            cancelButton.style.opacity = '0.6';
-            cancelButton.style.cursor = 'not-allowed';
         };
 
         buttonContainer.appendChild(cancelButton);

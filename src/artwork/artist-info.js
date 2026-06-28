@@ -1,8 +1,8 @@
 "use strict";
 
-import { getFolderId } from "../Tampermonkey/setting.js";
-import { err } from "../Tampermonkey/logger.js";
-import { gmFetch } from "../Tampermonkey/request.js";
+import { getFolderId } from "../tampermonkey/setting.js";
+import { err } from "../tampermonkey/logger.js";
+import { gmFetch } from "../tampermonkey/request.js";
 import { showMessage } from "../ui/toast.js";
 import { PIXIV_ARTIST_DIV_CLASS } from "../config/constants.js";
 import { checkEagle } from "../eagle/client.js";

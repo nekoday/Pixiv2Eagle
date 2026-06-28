@@ -1,6 +1,6 @@
 "use strict";
 
-import { dbg } from "../../Tampermonkey/logger.js";
+import { dbg } from "../../tampermonkey/logger.js";
 
 /**
  * 在画师文件夹（或 novels 子文件夹）中查找小说系列文件夹

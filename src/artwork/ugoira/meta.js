@@ -1,7 +1,7 @@
 "use strict";
 
-import { err } from "../../Tampermonkey/logger.js";
-import { gmFetch, gmFetchBinary } from "../../Tampermonkey/request.js";
+import { err } from "../../tampermonkey/logger.js";
+import { gmFetch, gmFetchBinary } from "../../tampermonkey/request.js";
 
 // 获取动图（ugoira）元数据
 export async function getUgoiraMeta(artworkId) {

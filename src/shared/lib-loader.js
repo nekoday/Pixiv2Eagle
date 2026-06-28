@@ -1,6 +1,6 @@
 "use strict";
 
-import { gmFetchText } from "../Tampermonkey/request.js";
+import { gmFetchText } from "../tampermonkey/request.js";
 import { USE_DOMESTIC_CDN } from "../config/constants.js";
 
 let __gifWorkerURL = null;

@@ -1,6 +1,6 @@
 "use strict";
 
-import { dbg } from "../../Tampermonkey/logger.js";
+import { dbg } from "../../tampermonkey/logger.js";
 
 const TYPE_FOLDER_DESCRIPTIONS = ["illustrations", "manga", "novels"];
 

@@ -1,7 +1,7 @@
 "use strict";
 
-import { getAutoCheckSavedStatus } from "../../Tampermonkey/setting.js";
-import { dbg, err } from "../../Tampermonkey/logger.js";
+import { getAutoCheckSavedStatus } from "../../tampermonkey/setting.js";
+import { dbg, err } from "../../tampermonkey/logger.js";
 import { createPixivStyledButton } from "../../ui/button.js";
 import { waitForElement } from "../../ui/dom.js";
 import {

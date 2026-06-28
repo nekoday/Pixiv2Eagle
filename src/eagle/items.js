@@ -1,8 +1,8 @@
 "use strict";
 
-import { getUseUploadDate, getSaveDescription } from "../Tampermonkey/setting.js";
-import { err } from "../Tampermonkey/logger.js";
-import { gmFetch } from "../Tampermonkey/request.js";
+import { getUseUploadDate, getSaveDescription } from "../tampermonkey/setting.js";
+import { err } from "../tampermonkey/logger.js";
+import { gmFetch } from "../tampermonkey/request.js";
 import {
     EAGLE_ITEM_LIST_LIMIT,
     EAGLE_ITEM_LIST_MAX_PAGES,

@@ -5,9 +5,9 @@ import {
     getSaveByType,
     getNovelSavePath,
     getNovelSaveFormat,
-} from "../../Tampermonkey/setting.js";
-import { dbg, err } from "../../Tampermonkey/logger.js";
-import { gmFetch } from "../../Tampermonkey/request.js";
+} from "../../tampermonkey/setting.js";
+import { dbg, err } from "../../tampermonkey/logger.js";
+import { gmFetch } from "../../tampermonkey/request.js";
 import { showMessage } from "../../ui/toast.js";
 import { EAGLE_SAVE_BUTTON_ID } from "../../config/constants.js";
 import { checkEagle } from "../../eagle/client.js";

@@ -27,30 +27,11 @@ export async function addUpdateSeriesButton() {
 
     if (document.getElementById("eagle-update-series-btn")) return;
 
-    const btn = createPixivStyledButton("更新系列漫画的序号");
+    const btn = createPixivStyledButton("更新系列漫画的序号", "primary");
     btn.id = "eagle-update-series-btn";
-    btn.style.backgroundColor = "#0096fa";
-    btn.style.color = "#fff";
-    btn.style.border = "none";
-    btn.style.fontWeight = "bold";
     btn.style.marginLeft = "16px";
     btn.style.height = "32px";
     btn.style.padding = "0 16px";
-
-    btn.onmouseenter = () => {
-        btn.style.backgroundColor = "#0075c5";
-    };
-    btn.onmouseleave = () => {
-        btn.style.backgroundColor = "#0096fa";
-        btn.style.color = "#fff";
-    };
-    btn.onmousedown = () => {
-        btn.style.backgroundColor = "#005c9c";
-    };
-    btn.onmouseup = () => {
-        btn.style.backgroundColor = "#0075c5";
-    };
-
     btn.onclick = updateSeriesChapters;
 
     container.insertBefore(btn, firstStoryBtn.nextSibling);

@@ -16,7 +16,7 @@ description: Re_Pixiv2Eagle 模块放置指南：域边界、index.js bootstrap 
 src/
 ├── index.js              # bootstrap ONLY
 ├── header.txt            # UserScript 元数据
-├── Tampermonkey/         # GM 封装：setting / request / storage / menu / logger
+├── tampermonkey/         # GM 封装：setting / request / storage / menu / logger
 ├── config/               # constants / monitor / selectors
 ├── routing/              # URL 观察与页面 handler 调度
 ├── ui/                   # toast / button / dom 通用 UI
@@ -32,7 +32,7 @@ src/
 
 | 域 | 放什么 | 不放什么 |
 |----|--------|---------|
-| `Tampermonkey/` | GM API 封装、全局设置键 | Pixiv/Eagle 业务逻辑 |
+| `tampermonkey/` | GM API 封装、全局设置键 | Pixiv/Eagle 业务逻辑 |
 | `config/` | 常量、monitor 配置、DOM 选择器 | API 调用、UI 组件 |
 | `routing/` | URL 变化监听、handler 调度 | 具体页面业务 |
 | `ui/` | 通用按钮/toast/DOM 工具 | 领域特定逻辑 |
@@ -72,11 +72,11 @@ syntax 规则 7.1–7.2 要求避免循环 import：
 2. 只涉及 Pixiv DOM/数据？→ 对应域 + `config/selectors/`
 3. 跨插画与小说？→ `shared/` 或各域各一份（优先不强行抽象）
 4. 新页面类型？→ 域目录 + `config/monitor.js` 新增 monitor 项
-5. 新 GM 设置？→ `Tampermonkey/setting.js` 的 `SETTING_KEYS`
+5. 新 GM 设置？→ `tampermonkey/setting.js` 的 `SETTING_KEYS`
 
 ## 禁止事项
 
 - 不要在 `index.js` 写 save/mark/button 业务
-- 不要新建 `novel/settings.js`（设置集中在 `Tampermonkey/setting.js`）
+- 不要新建 `novel/settings.js`（设置集中在 `tampermonkey/setting.js`）
 - 不要 `import` CDN 库（走 `shared/lib-loader.js` 动态加载）
 - 不要在业务模块直接调用 `GM_xmlhttpRequest`

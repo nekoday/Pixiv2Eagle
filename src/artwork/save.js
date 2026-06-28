@@ -4,8 +4,8 @@ import {
     getFolderId,
     getCreateSubFolder,
     getSaveByType,
-} from "../Tampermonkey/setting.js";
-import { err } from "../Tampermonkey/logger.js";
+} from "../tampermonkey/setting.js";
+import { err } from "../tampermonkey/logger.js";
 import { showMessage } from "../ui/toast.js";
 import { checkEagle } from "../eagle/client.js";
 import { createEagleFolder, getSeriesFolder } from "../eagle/folder.js";

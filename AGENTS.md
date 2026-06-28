@@ -12,13 +12,13 @@
 
 - 源码为 `src/` 下的 ES 模块树；esbuild 以 `src/index.js` 为唯一入口，打包为单个 IIFE 产物 `dist/Pixiv.js`。`src/header.txt` 为用户脚本元数据头，构建时作为 banner 注入产物，不在 `index.js` 内手写。
 - `src/index.js` 为 bootstrap 入口（注册菜单、组装 monitor、启动路由）；业务逻辑分布在各子目录。
-- 用户设置与 `SETTING_KEYS` 集中在 `Tampermonkey/setting.js`（各域通过 getter 读取，无独立 `novel/settings.js`）。
+- 用户设置与 `SETTING_KEYS` 集中在 `tampermonkey/setting.js`（各域通过 getter 读取，无独立 `novel/settings.js`）。
 
 ```
 src/
 ├── index.js                    # bootstrap 入口
 ├── header.txt                  # 用户脚本元数据
-├── Tampermonkey/
+├── tampermonkey/
 │   ├── setting.js              # SETTING_KEYS / DEFAULTS / getters / menu handlers
 │   ├── request.js              # gmRequest / gmFetch / gmFetchBinary / gmFetchText
 │   ├── storage.js              # eagleIndex 内部缓存

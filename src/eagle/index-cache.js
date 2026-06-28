@@ -1,13 +1,13 @@
 "use strict";
 
-import { bindEagleIndexRefresh, getFolderId } from "../Tampermonkey/setting.js";
-import { dbg, warn, err } from "../Tampermonkey/logger.js";
-import { gmFetch } from "../Tampermonkey/request.js";
+import { bindEagleIndexRefresh, getFolderId } from "../tampermonkey/setting.js";
+import { dbg, warn, err } from "../tampermonkey/logger.js";
+import { gmFetch } from "../tampermonkey/request.js";
 import {
     loadEagleIndexCache,
     saveEagleIndexCache,
     clearEagleIndexCache,
-} from "../Tampermonkey/storage.js";
+} from "../tampermonkey/storage.js";
 import { INDEX_EXPIRE_TIME } from "../config/constants.js";
 
 // 索引序列化：将 Map 转换为可存储的普通对象

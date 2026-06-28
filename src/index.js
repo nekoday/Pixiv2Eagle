@@ -1,7 +1,8 @@
 "use strict";
 
-import { dbg, err } from "./Tampermonkey/logger.js";
-import { registerMenuCommands } from "./Tampermonkey/menu.js";
+import { dbg, err } from "./tampermonkey/logger.js";
+import { registerMenuCommands } from "./tampermonkey/menu.js";
+import { initTheme } from "./ui/theme.js";
 import { createMonitorConfig } from "./config/monitor.js";
 import { observeUrlChanges } from "./routing/observe-url.js";
 import { handlePageChange } from "./routing/handle-page.js";
@@ -13,6 +14,7 @@ import { markSavedInNovelSeries } from "./novel/series/marking.js";
 import { debouncedMarkSavedInArtistList } from "./artist-list/marking.js";
 
 registerMenuCommands();
+initTheme();
 
 const monitorConfig = createMonitorConfig({
     addButton,

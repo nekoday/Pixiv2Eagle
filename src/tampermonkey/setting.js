@@ -14,6 +14,7 @@ export const SETTING_KEYS = Object.freeze({
     FOLDER_NAME_TEMPLATE: "folderNameTemplate",
     NOVEL_SAVE_PATH: "novelSavePath",
     NOVEL_SAVE_FORMAT: "novelSaveFormat",
+    UI_THEME: "uiTheme",
 });
 
 export const SETTING_DEFAULTS = Object.freeze({
@@ -27,6 +28,7 @@ export const SETTING_DEFAULTS = Object.freeze({
     [SETTING_KEYS.FOLDER_NAME_TEMPLATE]: "$name",
     [SETTING_KEYS.NOVEL_SAVE_PATH]: "",
     [SETTING_KEYS.NOVEL_SAVE_FORMAT]: "txt",
+    [SETTING_KEYS.UI_THEME]: "system",
 });
 
 let _invalidateEagleIndex = null;
@@ -184,6 +186,22 @@ export function setNovelSavePath() {
 // 获取小说保存格式
 export function getNovelSaveFormat() {
     return GM_getValue(SETTING_KEYS.NOVEL_SAVE_FORMAT, SETTING_DEFAULTS[SETTING_KEYS.NOVEL_SAVE_FORMAT]);
+}
+
+// 获取界面主题偏好
+export function getUiTheme() {
+    return GM_getValue(SETTING_KEYS.UI_THEME, SETTING_DEFAULTS[SETTING_KEYS.UI_THEME]);
+}
+
+// 三态轮询切换界面主题：light → dark → system
+export function cycleUiTheme() {
+    const themes = ["light", "dark", "system"];
+    const labels = { light: "浅色", dark: "深色", system: "跟随系统" };
+    const current = getUiTheme();
+    const idx = themes.indexOf(current);
+    const next = themes[(idx + 1) % themes.length];
+    GM_setValue(SETTING_KEYS.UI_THEME, next);
+    return { theme: next, label: labels[next] };
 }
 
 // 设置小说保存格式

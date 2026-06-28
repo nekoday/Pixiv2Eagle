@@ -1,7 +1,7 @@
 "use strict";
 
-import { dbg, err, warn } from "../Tampermonkey/logger.js";
-import { gmFetch } from "../Tampermonkey/request.js";
+import { dbg, err, warn } from "../tampermonkey/logger.js";
+import { gmFetch } from "../tampermonkey/request.js";
 import { MANGA_SERIES_INFO_SELECTOR } from "../config/selectors/index.js";
 import { processTags } from "./tags.js";
 import { getArtworkPages } from "./pages.js";

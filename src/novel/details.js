@@ -1,6 +1,6 @@
 "use strict";
 
-import { dbg, err } from "../Tampermonkey/logger.js";
+import { dbg, err } from "../tampermonkey/logger.js";
 import {
     NOVEL_DESC_SELECTOR,
     NOVEL_AUTHOR_CONTAINER_SELECTOR,

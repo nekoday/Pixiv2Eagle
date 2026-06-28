@@ -6,12 +6,21 @@ import {
     toggleCreateSubFolder,
     setNovelSavePath,
     setNovelSaveFormat,
+    cycleUiTheme,
     forceRefreshEagleIndex,
     SETTING_KEYS,
     SETTING_DEFAULTS,
 } from "./setting.js";
 import { saveCurrentArtwork } from "../artwork/save.js";
 import { setArtistMatcher } from "../eagle/artist-matcher.js";
+import { applyTheme } from "../ui/theme.js";
+import { showToast } from "../ui/toast.js";
+
+function setUiTheme() {
+    const { label } = cycleUiTheme();
+    applyTheme();
+    showToast(`界面主题：${label}`, "info");
+}
 
 export function registerMenuCommands() {
     GM_registerMenuCommand("📁 设置 Pixiv 文件夹 ID", setFolderId);
@@ -24,6 +33,7 @@ export function registerMenuCommands() {
     GM_registerMenuCommand("🔄 强制更新 Eagle 索引", forceRefreshEagleIndex);
     GM_registerMenuCommand("📂 设置小说保存路径", setNovelSavePath);
     GM_registerMenuCommand("📚 切换：小说保存格式 (TXT/MD/EPUB)", setNovelSaveFormat);
+    GM_registerMenuCommand("🎨 界面主题 (浅色/深色/跟随系统)", setUiTheme);
     GM_registerMenuCommand("🧪 切换：调试模式", makeToggle({ key: SETTING_KEYS.DEBUG_MODE, label: "调试模式" }));
     GM_registerMenuCommand("🧪 设置画师文件夹名称模板", setArtistMatcher);
 }

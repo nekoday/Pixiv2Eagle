@@ -1,7 +1,7 @@
 "use strict";
 
-import { err } from "../Tampermonkey/logger.js";
-import { gmFetchBinary } from "../Tampermonkey/request.js";
+import { err } from "../tampermonkey/logger.js";
+import { gmFetchBinary } from "../tampermonkey/request.js";
 import { NOVEL_IMAGE_DOWNLOAD_DELAY_MS } from "../config/constants.js";
 
 export function downloadFile(blob, filename) {

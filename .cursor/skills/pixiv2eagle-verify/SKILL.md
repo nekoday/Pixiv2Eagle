@@ -32,7 +32,7 @@ npm run build
 | 4 | 画师列表标记 | `artist-list/`、`config/selectors/list.js` |
 | 5 | 小说三格式 | `novel/save/`（TXT / MD / EPUB） |
 | 6 | 小说系列 | `novel/series/` |
-| 7 | 菜单项 | `Tampermonkey/menu.js`、`setting.js` |
+| 7 | 菜单项 | `tampermonkey/menu.js`、`setting.js` |
 
 详细步骤见 [reference.md](reference.md)。
 

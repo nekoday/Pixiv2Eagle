@@ -1,6 +1,6 @@
 "use strict";
 
-import { err } from "../../Tampermonkey/logger.js";
+import { err } from "../../tampermonkey/logger.js";
 import { findArtistFolder } from "../../eagle/artist.js";
 import { getAllEagleItemsInFolder } from "../../eagle/items.js";
 import { findMangaSeriesFolderInArtistTree } from "./folder.js";

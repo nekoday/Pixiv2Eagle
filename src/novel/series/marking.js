@@ -7,7 +7,7 @@ import {
     NOVEL_CHAPTER_REF_BUTTON_SELECTOR,
     NOVEL_AUTHOR_CONTAINER_SELECTOR,
 } from "../../config/selectors/index.js";
-import { getFolderId } from "../../Tampermonkey/setting.js";
+import { getFolderId } from "../../tampermonkey/setting.js";
 import { findArtistFolder } from "../../eagle/artist.js";
 import { findNovelSeriesFolder } from "./find-series-folder.js";
 import { waitForElement } from "../../ui/dom.js";

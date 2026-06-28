@@ -1,8 +1,8 @@
 "use strict";
 
-import { getFolderId } from "../Tampermonkey/setting.js";
-import { dbg, err } from "../Tampermonkey/logger.js";
-import { gmFetch } from "../Tampermonkey/request.js";
+import { getFolderId } from "../tampermonkey/setting.js";
+import { dbg, err } from "../tampermonkey/logger.js";
+import { gmFetch } from "../tampermonkey/request.js";
 import { removeChapterNumber } from "../shared/chapter-title.js";
 import { SERIES_NAV_BUTTON_SELECTOR } from "../config/selectors/index.js";
 import { findArtistFolder } from "../eagle/artist.js";

@@ -3,9 +3,9 @@
 import {
     getFolderId,
     getSaveByType,
-} from "../../Tampermonkey/setting.js";
-import { warn, err } from "../../Tampermonkey/logger.js";
-import { gmFetch } from "../../Tampermonkey/request.js";
+} from "../../tampermonkey/setting.js";
+import { warn, err } from "../../tampermonkey/logger.js";
+import { gmFetch } from "../../tampermonkey/request.js";
 import { findArtistFolder } from "../../eagle/artist.js";
 import { getTypeFolderInfo } from "../../eagle/type-folder.js";
 import { getNovelId } from "../id.js";
@@ -70,7 +70,7 @@ export async function updateNovelSaveButtonIfSaved(saveButton) {
 
         if (foundFolder) {
             saveButton.textContent = "已保存";
-            saveButton.style.backgroundColor = "#4caf50";
+            saveButton.classList.add("p2e-btn--saved");
             saveButton.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
