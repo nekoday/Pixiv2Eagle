@@ -2,16 +2,14 @@
 
 import { getFolderId, getDebugMode } from "../tampermonkey/setting.js";
 import { dbg, err } from "../tampermonkey/logger.js";
-import { waitForElement } from "../ui/dom.js";
 import { insertSavedBadge } from "../shared/marking/insert-badge.js";
+import {
+    waitForListContainer,
+    resolveThumbnailAnchor,
+} from "../shared/marking/resolve-thumbnail-anchor.js";
 import { findArtistFolder } from "../eagle/artist.js";
 import { getAllEagleItemsInFolder } from "../eagle/items.js";
 import { enrichMarkingContextForMangaSeriesPage } from "../manga/series/marking.js";
-import {
-    LIST_CONTAINER_SELECTOR,
-    SERIES_PAGE_LIST_SELECTOR,
-    THUMBNAIL_CONTAINER_SELECTOR,
-} from "../config/selectors/index.js";
 
 let markSavedDebounceTimer = null;
 let currentGalleryObserver = null;
@@ -45,37 +43,18 @@ export async function markSavedInArtistList() {
 
         log("当前页面匹配条件，开始处理");
 
-        // 确定搜索范围与列表容器
         let listContainer = null;
+        const isSeriesPage = location.pathname.includes("/series/");
 
-        // 1. 系列页面
-        if (location.pathname.includes("/series/")) {
-            const selector = SERIES_PAGE_LIST_SELECTOR;
-            log("系列页面：尝试定位列表容器", selector);
-            // 尝试等待容器出现（最多 5 秒，避免过久阻塞）
-            listContainer = await new Promise((resolve) => {
-                const el = document.querySelector(selector);
-                if (el) return resolve(el);
-                const obs = new MutationObserver(() => {
-                    const found = document.querySelector(selector);
-                    if (found) {
-                        obs.disconnect();
-                        resolve(found);
-                    }
-                });
-                obs.observe(document.body, { childList: true, subtree: true });
-                setTimeout(() => {
-                    obs.disconnect();
-                    resolve(null);
-                }, 5000);
-            });
+        if (isSeriesPage) {
+            log("系列页面：使用 resolver 定位列表容器");
+        } else {
+            log("插画/漫画页面：使用 resolver 定位列表容器");
         }
-        // 2. 插画/漫画页面 (以及用户主页可能的列表)
-        else {
-            // 用户提供的选择器: div.sc-bf8cea3f-0.dKbaFf
-            const selector = LIST_CONTAINER_SELECTOR;
-            log("插画/漫画页面：尝试定位列表容器", selector);
-            listContainer = await waitForElement(selector, 5000);
+
+        listContainer = await waitForListContainer({ isSeriesPage, timeout: 5000 });
+        if (listContainer) {
+            log("已定位列表容器:", listContainer.className || listContainer.tagName);
         }
 
         const anchorMap = {};
@@ -96,20 +75,7 @@ export async function markSavedInArtistList() {
 
                 const pid = m[1];
 
-                // 查找目标缩略图容器 (标记插入点)
-                // 优先匹配带 radius="4" 的 div.sc-f44a0b30-9.cvPXKv
-                let target = li.querySelector(THUMBNAIL_CONTAINER_SELECTOR);
-                if (!target) target = li.querySelector("div.sc-f44a0b30-9");
-
-                // 备选：如果找不到特定 class，尝试找图片容器
-                if (!target) {
-                    const img = li.querySelector('img[src*="i.pximg.net"]');
-                    if (img) {
-                        // 通常图片被包裹在 picture > div 或直接在 div 中
-                        // 我们希望找到那个有圆角和 overflow 的容器
-                        target = img.closest('div[radius="4"]') || img.parentElement;
-                    }
-                }
+                const target = resolveThumbnailAnchor(li, { context: "list" });
 
                 if (target) {
                     anchorMap[pid] = target;
@@ -250,9 +216,7 @@ export async function markSavedInArtistList() {
             if (shouldScan && listContainer) {
                 const lis = listContainer.querySelectorAll("li");
                 for (const li of lis) {
-                    // 查找目标容器
-                    let target = li.querySelector("div.sc-f44a0b30-9.cvPXKv");
-                    if (!target) target = li.querySelector("div.sc-f44a0b30-9");
+                    const target = resolveThumbnailAnchor(li, { context: "list" });
 
                     // 如果已经检查过，跳过
                     if (target && target.dataset.eagleChecked === "1") continue;
