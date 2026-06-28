@@ -11,22 +11,83 @@
 ## 源码与运行时
 
 - 源码为 `src/` 下的 ES 模块树；esbuild 以 `src/index.js` 为唯一入口，打包为单个 IIFE 产物 `dist/Pixiv.js`。`src/header.txt` 为用户脚本元数据头，构建时作为 banner 注入产物，不在 `index.js` 内手写。
-- `src/index.js` 为 bootstrap 入口（注册菜单、组装 monitor、启动路由）；业务逻辑分布在各子目录：
+- `src/index.js` 为 bootstrap 入口（注册菜单、组装 monitor、启动路由）；业务逻辑分布在各子目录。
+- 用户设置与 `SETTING_KEYS` 集中在 `Tampermonkey/setting.js`（各域通过 getter 读取，无独立 `novel/settings.js`）。
 
 ```
 src/
-├── index.js              # bootstrap 入口
-├── header.txt            # 用户脚本元数据
-├── Tampermonkey/         # GM 封装（setting / request / storage / menu / logger）
-├── config/               # constants、monitor、selectors/
-├── routing/              # URL 观察与页面分发
-├── ui/                   # toast、button、dom
-├── shared/               # 跨领域共享（chapter-title、marking/）
-├── eagle/                # Eagle API 客户端与索引缓存
-├── artwork/              # 插画保存（含 ugoira/）
-├── manga/                # 漫画（series/ 子目录）
-├── novel/                # 小说（save/、ui/、series/ 子目录）
-└── artist-list/          # 画师列表已保存标记
+├── index.js                    # bootstrap 入口
+├── header.txt                  # 用户脚本元数据
+├── Tampermonkey/
+│   ├── setting.js              # SETTING_KEYS / DEFAULTS / getters / menu handlers
+│   ├── request.js              # gmRequest / gmFetch / gmFetchBinary / gmFetchText
+│   ├── storage.js              # eagleIndex 内部缓存
+│   ├── menu.js                 # GM_registerMenuCommand
+│   └── logger.js               # dbg / warn / err
+├── config/
+│   ├── constants.js
+│   ├── monitor.js
+│   └── selectors/              # artwork / list / manga / novel 等 + index.js 聚合
+├── routing/
+│   ├── observe-url.js
+│   └── handle-page.js
+├── ui/
+│   ├── toast.js
+│   ├── button.js
+│   └── dom.js
+├── shared/
+│   ├── chapter-title.js
+│   ├── lib-loader.js           # 共享 CDN 动态加载（ugoira / epub 复用）
+│   └── marking/
+│       └── insert-badge.js
+├── eagle/
+│   ├── client.js
+│   ├── folder.js
+│   ├── artist.js
+│   ├── artist-matcher.js       # ArtistMatcher 类与 matcher 工厂（打破 artist↔folder 环）
+│   ├── type-folder.js
+│   ├── items.js
+│   └── index-cache.js
+├── artwork/
+│   ├── id.js
+│   ├── details.js
+│   ├── pages.js
+│   ├── save.js
+│   ├── tags.js
+│   ├── artist-info.js
+│   ├── find-saved-folder.js    # 已保存文件夹查找（自 eagle/items 解耦）
+│   ├── ui/
+│   │   ├── save-button.js
+│   │   ├── recommendation-mark.js
+│   │   └── move-subfolder.js
+│   └── ugoira/
+│       ├── meta.js
+│       ├── lib-loader.js       # ugoira 专用 CDN 加载（复用 shared/lib-loader）
+│       └── convert.js
+├── manga/
+│   └── series/
+│       ├── folder.js
+│       ├── update-chapters.js
+│       ├── ui-update-button.js
+│       └── marking.js
+├── novel/
+│   ├── id.js
+│   ├── resolvers.js
+│   ├── details.js
+│   ├── content.js
+│   ├── download.js
+│   ├── save/
+│   │   ├── index.js
+│   │   ├── text-markdown.js
+│   │   └── epub.js
+│   ├── ui/
+│   │   ├── save-button.js
+│   │   └── saved-state.js
+│   └── series/
+│       ├── find-series-folder.js
+│       └── marking.js
+└── artist-list/
+    └── marking.js
 ```
 
 - 运行环境：浏览器 + Tampermonkey；依赖 `GM_xmlhttpRequest` / `GM_getValue` / `GM_setValue` / `GM_registerMenuCommand`。
