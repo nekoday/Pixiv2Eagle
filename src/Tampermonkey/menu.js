@@ -11,7 +11,7 @@ import {
     SETTING_DEFAULTS,
 } from "./setting.js";
 import { saveCurrentArtwork } from "../artwork/save.js";
-import { setArtistMatcher } from "../eagle/artist.js";
+import { setArtistMatcher } from "../eagle/artist-matcher.js";
 
 export function registerMenuCommands() {
     GM_registerMenuCommand("📁 设置 Pixiv 文件夹 ID", setFolderId);

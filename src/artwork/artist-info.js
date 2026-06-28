@@ -6,7 +6,8 @@ import { gmFetch } from "../Tampermonkey/request.js";
 import { showMessage } from "../ui/toast.js";
 import { PIXIV_ARTIST_DIV_CLASS } from "../config/constants.js";
 import { checkEagle } from "../eagle/client.js";
-import { findArtistFolder, getArtistMatcher } from "../eagle/artist.js";
+import { findArtistFolder } from "../eagle/artist.js";
+import { getArtistMatcher } from "../eagle/artist-matcher.js";
 import { getArtworkId } from "./id.js";
 
 /**
