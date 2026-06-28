@@ -16,7 +16,7 @@ import { checkEagle } from "../../eagle/client.js";
 import { createEagleFolder } from "../../eagle/folder.js";
 import { findArtistFolder } from "../../eagle/artist.js";
 import { getTypeFolderInfo, getOrCreateTypeFolder } from "../../eagle/type-folder.js";
-import { findSavedFolderForArtwork } from "../../eagle/items.js";
+import { findSavedFolderForArtwork } from "../find-saved-folder.js";
 import { removeChapterNumber } from "../../shared/chapter-title.js";
 import { getArtworkId } from "../id.js";
 import { getArtworkDetails } from "../details.js";

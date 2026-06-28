@@ -9,7 +9,7 @@ import {
     EAGLE_OPEN_ITEM_BUTTON_ID,
 } from "../../config/constants.js";
 import { checkEagle } from "../../eagle/client.js";
-import { findSavedFolderForArtwork } from "../../eagle/items.js";
+import { findSavedFolderForArtwork } from "../find-saved-folder.js";
 import { getArtworkId } from "../id.js";
 import { saveCurrentArtwork } from "../save.js";
 import { openArtistFolderFromArtworkPage } from "../artist-info.js";

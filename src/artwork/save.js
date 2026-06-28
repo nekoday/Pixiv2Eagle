@@ -13,6 +13,7 @@ import { getArtistFolder } from "../eagle/artist.js";
 import { getTypeFolderInfo, getOrCreateTypeFolder } from "../eagle/type-folder.js";
 import { saveToEagle } from "../eagle/items.js";
 import { invalidateEagleIndex } from "../eagle/index-cache.js";
+import { convertUgoiraToGifBlob, blobToDataURL } from "./ugoira/convert.js";
 import { getArtworkId } from "./id.js";
 import { getArtworkDetails } from "./details.js";
 
@@ -64,7 +65,13 @@ export async function saveCurrentArtwork() {
             targetFolderId = await createEagleFolder(details.illustTitle, targetFolderId, artworkId);
         }
 
-        await saveToEagle(details.originalUrls, targetFolderId, details, artworkId);
+        let imageUrls = details.originalUrls;
+        if (details.illustType === 2) {
+            const gifBlob = await convertUgoiraToGifBlob(artworkId);
+            imageUrls = [await blobToDataURL(gifBlob)];
+        }
+
+        await saveToEagle(imageUrls, targetFolderId, details, artworkId);
 
         invalidateEagleIndex();
 
