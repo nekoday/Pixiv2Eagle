@@ -40,7 +40,7 @@ export function bindEagleIndexRefresh({ invalidateEagleIndex, ensureEagleIndex }
 
 // 获取文件夹 ID
 export function getFolderId() {
-    return GM_getValue("pixivFolderId", "");
+    return GM_getValue(SETTING_KEYS.PIXIV_FOLDER_ID, SETTING_DEFAULTS[SETTING_KEYS.PIXIV_FOLDER_ID]);
 }
 
 // 设置文件夹 ID
@@ -71,7 +71,7 @@ export function setFolderId() {
     // 再次 trim 以防万一
     finalId = finalId.trim();
 
-    GM_setValue("pixivFolderId", finalId);
+    GM_setValue(SETTING_KEYS.PIXIV_FOLDER_ID, finalId);
 
     if (finalId === "") {
         alert("已清空文件夹 ID，将默认在根目录创建画师文件夹");
@@ -82,12 +82,12 @@ export function setFolderId() {
 
 // 获取是否使用投稿时间
 export function getUseUploadDate() {
-    return GM_getValue("useUploadDate", false);
+    return GM_getValue(SETTING_KEYS.USE_UPLOAD_DATE, SETTING_DEFAULTS[SETTING_KEYS.USE_UPLOAD_DATE]);
 }
 
 // 获取是否保存作品描述
 export function getSaveDescription() {
-    return GM_getValue("saveDescription", true); // 默认开启
+    return GM_getValue(SETTING_KEYS.SAVE_DESCRIPTION, SETTING_DEFAULTS[SETTING_KEYS.SAVE_DESCRIPTION]);
 }
 
 // 设置 toggle 工厂：生成布尔型开关函数（P1 阶段仍用 alert，P2 替换为 toast）
@@ -105,46 +105,46 @@ export function toggleCreateSubFolder() {
     const currentMode = getCreateSubFolder();
     switch (currentMode) {
         case "off":
-            GM_setValue("createSubFolder", "multi-page");
+            GM_setValue(SETTING_KEYS.CREATE_SUB_FOLDER, "multi-page");
             alert("✅ 仅为多页作品创建子文件夹");
             break;
         case "multi-page":
-            GM_setValue("createSubFolder", "always");
+            GM_setValue(SETTING_KEYS.CREATE_SUB_FOLDER, "always");
             alert("✅ 为任意作品创建子文件夹");
             break;
         case "always":
-            GM_setValue("createSubFolder", "off");
+            GM_setValue(SETTING_KEYS.CREATE_SUB_FOLDER, "off");
             alert("❌ 已关闭创建作品子文件夹功能");
             break;
         default:
-            GM_setValue("createSubFolder", "off");
+            GM_setValue(SETTING_KEYS.CREATE_SUB_FOLDER, "off");
             alert("❌ 已关闭创建作品子文件夹功能");
     }
 }
 
 // 获取是否为多 P 作品创建子文件夹
 export function getCreateSubFolder() {
-    let currentMode = GM_getValue("createSubFolder", "off");
+    let currentMode = GM_getValue(SETTING_KEYS.CREATE_SUB_FOLDER, SETTING_DEFAULTS[SETTING_KEYS.CREATE_SUB_FOLDER]);
     if (typeof currentMode === "boolean") {
         currentMode = currentMode ? "multi-page" : "off";
-        GM_setValue("createSubFolder", currentMode);
+        GM_setValue(SETTING_KEYS.CREATE_SUB_FOLDER, currentMode);
     }
     return currentMode;
 }
 
 // 获取是否按类型保存
 export function getSaveByType() {
-    return GM_getValue("saveByType", false);
+    return GM_getValue(SETTING_KEYS.SAVE_BY_TYPE, SETTING_DEFAULTS[SETTING_KEYS.SAVE_BY_TYPE]);
 }
 
 // 获取调试模式状态
 export function getDebugMode() {
-    return GM_getValue("debugMode", false);
+    return GM_getValue(SETTING_KEYS.DEBUG_MODE, SETTING_DEFAULTS[SETTING_KEYS.DEBUG_MODE]);
 }
 
 // 获取是否自动检测作品保存状态
 export function getAutoCheckSavedStatus() {
-    return GM_getValue("autoCheckSavedStatus", false);
+    return GM_getValue(SETTING_KEYS.AUTO_CHECK_SAVED_STATUS, SETTING_DEFAULTS[SETTING_KEYS.AUTO_CHECK_SAVED_STATUS]);
 }
 
 // 强制更新 Eagle 索引
@@ -161,7 +161,7 @@ export async function forceRefreshEagleIndex() {
 
 // 获取小说保存路径配置
 export function getNovelSavePath() {
-    return GM_getValue("novelSavePath", "");
+    return GM_getValue(SETTING_KEYS.NOVEL_SAVE_PATH, SETTING_DEFAULTS[SETTING_KEYS.NOVEL_SAVE_PATH]);
 }
 
 // 设置小说保存路径
@@ -172,7 +172,7 @@ export function setNovelSavePath() {
     if (userInput === null) return;
 
     const path = userInput.trim();
-    GM_setValue("novelSavePath", path);
+    GM_setValue(SETTING_KEYS.NOVEL_SAVE_PATH, path);
 
     if (path === "") {
         alert("已清空保存路径，将提示用户手动输入");
@@ -183,8 +183,7 @@ export function setNovelSavePath() {
 
 // 获取小说保存格式
 export function getNovelSaveFormat() {
-    const format = GM_getValue("novelSaveFormat", "txt"); // 默认 txt
-    return format;
+    return GM_getValue(SETTING_KEYS.NOVEL_SAVE_FORMAT, SETTING_DEFAULTS[SETTING_KEYS.NOVEL_SAVE_FORMAT]);
 }
 
 // 设置小说保存格式
@@ -196,6 +195,6 @@ export function setNovelSaveFormat() {
     const formatIndex = formats.indexOf(currentFormat);
     const nextFormat = formats[(formatIndex + 1) % formats.length];
 
-    GM_setValue("novelSaveFormat", nextFormat);
+    GM_setValue(SETTING_KEYS.NOVEL_SAVE_FORMAT, nextFormat);
     alert(`小说保存格式已设置为: ${formatNames[nextFormat]}`);
 }
