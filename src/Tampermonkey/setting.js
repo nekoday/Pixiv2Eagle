@@ -1,6 +1,5 @@
 "use strict";
 
-import { showToast } from "../ui/toast.js";
 import { err } from "./logger.js";
 
 /** 用户 GM 设置键（eagleIndex 在 storage.js，不在此列） */
