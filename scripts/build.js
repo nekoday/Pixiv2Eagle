@@ -10,7 +10,7 @@ const banner = fs.readFileSync(path.join(root, 'src/header.txt'), 'utf8');
 /** @type {esbuild.BuildOptions} */
 const config = {
   entryPoints: [path.join(root, 'src/index.js')],
-  outfile: path.join(root, 'dist/Pixiv.js'),
+  outfile: path.join(root, 'dist/RePixiv2Eagle.js'),
   bundle: true,
   format: 'iife',
   minify: false,
@@ -26,7 +26,7 @@ async function main() {
     console.log('[build] watching for changes...');
   } else {
     await esbuild.build(config);
-    console.log('[build] done -> dist/Pixiv.js');
+    console.log('[build] done -> dist/RePixiv2Eagle.js');
   }
 }
 

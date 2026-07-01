@@ -3,6 +3,9 @@ node_modules/
 
 # Build output
 dist/
+
+# Release artifacts (npm run release)
+Releases/
 *.js.map
 
 # OS

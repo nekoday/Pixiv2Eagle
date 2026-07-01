@@ -2,10 +2,11 @@
   "name": "re-pixiv2eagle",
   "version": "0.0.1",
   "private": true,
-  "description": "Tampermonkey userscript for saving Pixiv artworks to Eagle",
+  "description": "Re_Pixiv2Eagle — Tampermonkey userscript for saving Pixiv artworks to Eagle",
   "scripts": {
     "dev": "node scripts/build.js --watch",
-    "build": "node scripts/build.js"
+    "build": "node scripts/build.js",
+    "release": "node scripts/release.js"
   },
   "devDependencies": {
     "esbuild": "^0.25.0"
