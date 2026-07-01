@@ -39,3 +39,4 @@ pnpm-debug.log*
 
 # Superpowers plans/specs (local agent workflow)
 docs/superpowers/
+docs/TODO.md
