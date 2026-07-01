@@ -3,12 +3,12 @@ name: pixiv2eagle-verify
 description: 验证 Re_Pixiv2Eagle 代码改动：npm run build 为唯一自动化检查，Tampermonkey 手测 7 项清单。在代码改动收尾、用户询问如何验证、或 claim 完成前 MUST 使用。
 ---
 
-# Pixiv2Eagle 验证
+# Re_Pixiv2Eagle 验证
 
 ## 前置条件
 
 - Eagle 应用**必须**已启动（API 基址 `http://localhost:41595`）
-- Tampermonkey 已安装并启用本脚本（`dist/Pixiv.js` 或开发 watch 产物）
+- Tampermonkey 已安装并启用本脚本（`dist/RePixiv2Eagle.js` 或开发 watch 产物）
 - 已在菜单中配置 Pixiv 根文件夹 ID
 
 ## 自动化验证（唯一）

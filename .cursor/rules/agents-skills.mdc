@@ -13,6 +13,7 @@ alwaysApply: true
 | `pixiv-selectors` | `config/selectors/` 结构与 fallback | Pixiv UI 改版；按钮/标记消失；改 DOM 交互 |
 | `eagle-api-patterns` | Eagle API、文件夹层级、索引 | 新增/修改 Eagle 集成、文件夹或索引逻辑 |
 | `module-placement` | 域边界与 bootstrap 职责 | 新功能；拆文件；不确定代码放哪 |
+| `release-packaging` | `npm run release`、Releases/{version}/ | 发版；打包 Tampermonkey 脚本；生成发行目录 |
 
 ## 与领域规则的关系
 
