@@ -261,3 +261,54 @@ export async function debouncedMarkSavedInArtistList() {
         markSavedInArtistList();
     }, 300);
 }
+
+function isArtistListPage() {
+    const path = location.pathname;
+    return (
+        path.includes("/illustrations") ||
+        path.includes("/manga") ||
+        path.includes("/series/") ||
+        path.includes("/artworks")
+    );
+}
+
+function findListLiByPid(pid) {
+    const links = document.querySelectorAll('a[href*="/artworks/"]');
+    for (const link of links) {
+        const href = link.getAttribute("href") || "";
+        const m = href.match(/\/artworks\/(\d+)/);
+        if (m && m[1] === pid) {
+            return link.closest("li");
+        }
+    }
+    return null;
+}
+
+/**
+ * 保存事件增量更新：在画师/系列列表页按 pid 标记已保存 li。
+ * @param {{ kind: string, id: string }} payload
+ */
+export function handleSavedEventForArtistList(payload) {
+    const { kind, id } = payload;
+    if (kind !== "artwork" && kind !== "manga-chapter") return;
+    if (!id) return;
+    if (!isArtistListPage()) return;
+
+    const li = findListLiByPid(id);
+    if (!li) return;
+
+    const target = resolveThumbnailAnchor(li, { context: "list" });
+    if (!target) return;
+
+    if (target.dataset.eagleSaved === "1" || target.querySelector(".eagle-saved-badge")) return;
+
+    delete target.dataset.eagleChecked;
+    insertSavedBadge(target, {
+        zIndex: "2147483647",
+        fontSize: "18px",
+        padding: "2px 6px",
+        large: true,
+        markContainer: true,
+        ensureOverflowVisible: true,
+    });
+}

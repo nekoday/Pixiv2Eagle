@@ -161,11 +161,19 @@ function buildThumbnailTier3(context) {
 /**
  * 在单个 li 内解析缩略图锚点（徽章插入容器）。
  * @param {HTMLElement} li
- * @param {{ context?: 'list'|'rec' }} [options]
+ * @param {{ context?: 'list'|'rec'|'sidebar' }} [options]
  * @returns {HTMLElement|null}
  */
 export function resolveThumbnailAnchor(li, { context = "list" } = {}) {
     if (!li) return null;
+
+    if (context === "sidebar") {
+        const radiusDiv = li.querySelector('div[radius="4"]');
+        if (radiusDiv) return radiusDiv;
+        const sidebarImg = li.querySelector('img[src*="i.pximg.net"]') || li.querySelector("img");
+        if (sidebarImg) return sidebarImg.closest('div[radius="4"]') || sidebarImg.parentElement;
+        return li;
+    }
 
     // Tier 1 结构
     const link = li.querySelector('a[href*="/artworks/"]');

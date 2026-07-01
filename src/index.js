@@ -3,6 +3,7 @@
 import { dbg, err } from "./tampermonkey/logger.js";
 import { registerMenuCommands } from "./tampermonkey/menu.js";
 import { initTheme } from "./ui/theme.js";
+import { initControlPanel } from "./ui/control-panel/index.js";
 import { createMonitorConfig } from "./config/monitor.js";
 import { observeUrlChanges } from "./routing/observe-url.js";
 import { handlePageChange } from "./routing/handle-page.js";
@@ -12,9 +13,12 @@ import { markSavedInRecommendationArea } from "./artwork/ui/recommendation-mark.
 import { addNovelButton } from "./novel/ui/save-button.js";
 import { markSavedInNovelSeries } from "./novel/series/marking.js";
 import { debouncedMarkSavedInArtistList } from "./artist-list/marking.js";
+import { initSavedEventBus } from "./shared/marking/saved-event-bus.js";
 
 registerMenuCommands();
 initTheme();
+initControlPanel();
+initSavedEventBus();
 
 const monitorConfig = createMonitorConfig({
     addButton,

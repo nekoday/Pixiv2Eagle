@@ -5,9 +5,10 @@ import {
     getSaveByType,
 } from "../../tampermonkey/setting.js";
 import { warn, err } from "../../tampermonkey/logger.js";
-import { gmFetch } from "../../tampermonkey/request.js";
+import { openEagleFolder } from "../../eagle/deep-link.js";
 import { findArtistFolder } from "../../eagle/artist.js";
 import { getTypeFolderInfo } from "../../eagle/type-folder.js";
+import { EAGLE_SAVE_BUTTON_ID } from "../../config/constants.js";
 import { getNovelId } from "../id.js";
 import { getNovelDetails } from "../details.js";
 
@@ -74,14 +75,33 @@ export async function updateNovelSaveButtonIfSaved(saveButton) {
             saveButton.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                gmFetch("http://localhost:41595/api/folder/activate", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ folderId: foundFolder.id }),
-                });
+                openEagleFolder(foundFolder.id);
             };
         }
     } catch (error) {
         err("Check saved status failed:", error);
     }
+}
+
+/**
+ * 保存事件增量更新：小说详情页按钮变「已保存」。
+ * @param {{ kind: string, id: string }} payload
+ */
+export function handleSavedEventForNovelDetail(payload) {
+    const { kind, id } = payload;
+    if (kind !== "novel") return;
+    if (!id) return;
+
+    const novelId = getNovelId();
+    if (!novelId || id !== novelId) return;
+
+    const wrapper = document.getElementById(EAGLE_SAVE_BUTTON_ID);
+    if (!wrapper) return;
+
+    const saveButton = wrapper.querySelector("div:last-child");
+    if (!saveButton) return;
+
+    if (saveButton.textContent === "已保存" || saveButton.classList.contains("p2e-btn--saved")) return;
+
+    updateNovelSaveButtonIfSaved(saveButton);
 }

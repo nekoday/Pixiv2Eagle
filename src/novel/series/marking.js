@@ -45,20 +45,54 @@ export async function markSavedInNovelSeries() {
         if (savedChapterIds.has(novelId)) {
             const targetContainer = li.querySelector(NOVEL_CHAPTER_BADGE_CONTAINER_SELECTOR);
             if (!targetContainer) continue;
-            if (targetContainer.querySelector(".eagle-saved-mark")) continue;
-
-            const refButton = targetContainer.querySelector(NOVEL_CHAPTER_REF_BUTTON_SELECTOR);
-            const mark = document.createElement("span");
-            mark.className = "eagle-saved-mark";
-            mark.textContent = "✅";
-            mark.style.marginRight = "8px";
-            mark.title = "已保存到 Eagle";
-
-            if (refButton) {
-                targetContainer.insertBefore(mark, refButton);
-            } else {
-                targetContainer.appendChild(mark);
-            }
+            insertNovelSeriesSavedMark(targetContainer);
         }
+    }
+}
+
+function insertNovelSeriesSavedMark(targetContainer) {
+    if (targetContainer.querySelector(".eagle-saved-mark")) return;
+
+    const refButton = targetContainer.querySelector(NOVEL_CHAPTER_REF_BUTTON_SELECTOR);
+    const mark = document.createElement("span");
+    mark.className = "eagle-saved-mark";
+    mark.textContent = "✅";
+    mark.style.marginRight = "8px";
+    mark.title = "已保存到 Eagle";
+
+    if (refButton) {
+        targetContainer.insertBefore(mark, refButton);
+    } else {
+        targetContainer.appendChild(mark);
+    }
+}
+
+/**
+ * 保存事件增量更新：小说系列页按 novelId 插入 ✅ 标记。
+ * @param {{ kind: string, id: string }} payload
+ */
+export function handleSavedEventForNovelSeries(payload) {
+    const { kind, id } = payload;
+    if (kind !== "novel") return;
+    if (!id) return;
+
+    if (!location.pathname.match(/\/novel\/series\/(\d+)/)) return;
+
+    const listContainer = document.querySelector(NOVEL_SERIES_LIST_SELECTOR);
+    if (!listContainer) return;
+
+    const lis = listContainer.querySelectorAll("li");
+    for (const li of lis) {
+        const link = li.querySelector(NOVEL_CHAPTER_LINK_SELECTOR);
+        if (!link) continue;
+
+        const novelId = link.getAttribute("data-gtm-value");
+        if (novelId !== id) continue;
+
+        const targetContainer = li.querySelector(NOVEL_CHAPTER_BADGE_CONTAINER_SELECTOR);
+        if (!targetContainer) return;
+
+        insertNovelSeriesSavedMark(targetContainer);
+        return;
     }
 }
