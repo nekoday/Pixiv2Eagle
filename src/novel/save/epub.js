@@ -4,90 +4,20 @@ import { err } from "../../tampermonkey/logger.js";
 import { gmFetchBinary } from "../../tampermonkey/request.js";
 import { ensureJSZipLoaded } from "../../shared/lib-loader.js";
 
-export function createEPUBProgressWindow() {
-        const overlay = document.createElement("div");
-        overlay.className = "p2e-modal-overlay";
+export async function generateEPUB(details, combinedContent, onProgress = null, signal = null) {
 
-        const modal = document.createElement("div");
-        modal.className = "p2e-modal";
-
-        const title = document.createElement("h3");
-        title.textContent = "正在生成 EPUB 电子书";
-        title.className = "p2e-modal__title";
-
-        const progressContainer = document.createElement("div");
-        progressContainer.className = "p2e-modal__progress-container";
-
-        const progressBar = document.createElement("div");
-        progressBar.className = "p2e-modal__progress-track";
-
-        const progressFill = document.createElement("div");
-        progressFill.className = "p2e-modal__progress-fill";
-        progressBar.appendChild(progressFill);
-
-        const progressText = document.createElement("div");
-        progressText.className = "p2e-modal__progress-text";
-        progressText.textContent = "初始化...";
-
-        progressContainer.appendChild(progressBar);
-        progressContainer.appendChild(progressText);
-
-        const buttonContainer = document.createElement("div");
-        buttonContainer.className = "p2e-modal__actions";
-
-        let cancelled = false;
-        const cancelButton = document.createElement("button");
-        cancelButton.textContent = "终止";
-        cancelButton.className = "p2e-modal__cancel-btn";
-        cancelButton.onclick = () => {
-            cancelled = true;
-            progressText.textContent = "正在终止...";
-            cancelButton.disabled = true;
-        };
-
-        buttonContainer.appendChild(cancelButton);
-
-        modal.appendChild(title);
-        modal.appendChild(progressContainer);
-        modal.appendChild(buttonContainer);
-        overlay.appendChild(modal);
-        document.body.appendChild(overlay);
-
-        return {
-            updateProgress: (percent, message) => {
-                if (cancelled) return;
-                progressFill.style.width = `${Math.min(100, Math.max(0, percent))}%`;
-                if (message) {
-                    progressText.textContent = message;
-                }
-            },
-            close: () => {
-                if (overlay.parentNode) {
-                    overlay.parentNode.removeChild(overlay);
-                }
-            },
-            isCancelled: () => cancelled,
-            getCancelButton: () => cancelButton
-        };
-    }
-
-export async function generateEPUB(details, combinedContent, progressWindow = null) {
-        
-        // 检查是否已取消
-        if (progressWindow && progressWindow.isCancelled()) {
-            throw new Error("EPUB 生成已取消");
+        if (signal?.aborted) {
+            const abortErr = new Error("EPUB 生成已取消");
+            abortErr.name = "AbortError";
+            throw abortErr;
         }
-        
-        if (progressWindow) {
-            progressWindow.updateProgress(5, '正在加载 JSZip 库...');
-        }
+
+        onProgress?.(5, '正在加载 JSZip 库...');
         
         // 确保 JSZip 已加载
         await ensureJSZipLoaded();
         
-        if (progressWindow) {
-            progressWindow.updateProgress(10, '正在创建 EPUB 结构...');
-        }
+        onProgress?.(10, '正在创建 EPUB 结构...');
         
         const zip = new window.JSZip();
         const safeTitle = details.title.replace(/[\\/:*?"<>|]/g, "_");
@@ -108,17 +38,16 @@ export async function generateEPUB(details, combinedContent, progressWindow = nu
         const oebps = zip.folder("OEBPS");
         const images = oebps.folder("images");
         
-        // 检查是否已取消
-        if (progressWindow && progressWindow.isCancelled()) {
-            throw new Error("EPUB 生成已取消");
+        if (signal?.aborted) {
+            const abortErr = new Error("EPUB 生成已取消");
+            abortErr.name = "AbortError";
+            throw abortErr;
         }
         
         // 4. 下载并添加封面图片
         let coverImagePath = null;
         if (details.coverUrl) {
-            if (progressWindow) {
-                progressWindow.updateProgress(20, '正在下载封面图片...');
-            }
+            onProgress?.(20, '正在下载封面图片...');
             try {
                 const coverData = await gmFetchBinary(details.coverUrl, {
                     headers: { referer: "https://www.pixiv.net/" }
@@ -133,9 +62,10 @@ export async function generateEPUB(details, combinedContent, progressWindow = nu
             }
         }
         
-        // 检查是否已取消
-        if (progressWindow && progressWindow.isCancelled()) {
-            throw new Error("EPUB 生成已取消");
+        if (signal?.aborted) {
+            const abortErr = new Error("EPUB 生成已取消");
+            abortErr.name = "AbortError";
+            throw abortErr;
         }
         
         // 5. 下载并添加正文中的图片
@@ -143,15 +73,13 @@ export async function generateEPUB(details, combinedContent, progressWindow = nu
         if (combinedContent.images && combinedContent.images.length > 0) {
             const totalImages = combinedContent.images.length;
             for (let i = 0; i < combinedContent.images.length; i++) {
-                // 检查是否已取消
-                if (progressWindow && progressWindow.isCancelled()) {
-                    throw new Error("EPUB 生成已取消");
+                if (signal?.aborted) {
+                    const abortErr = new Error("EPUB 生成已取消");
+                    abortErr.name = "AbortError";
+                    throw abortErr;
                 }
                 
-                if (progressWindow) {
-                    const progress = 30 + Math.floor((i / totalImages) * 20);
-                    progressWindow.updateProgress(progress, `正在下载图片 ${i + 1}/${totalImages}...`);
-                }
+                onProgress?.(30 + Math.floor((i / totalImages) * 20), `正在下载图片 ${i + 1}/${totalImages}...`);
                 
                 const img = combinedContent.images[i];
                 try {
@@ -173,9 +101,7 @@ export async function generateEPUB(details, combinedContent, progressWindow = nu
             }
         }
         
-        if (progressWindow) {
-            progressWindow.updateProgress(50, '正在生成 HTML 内容...');
-        }
+        onProgress?.(50, '正在生成 HTML 内容...');
         
         // 6. 生成封面页 HTML
         let coverHtml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -501,85 +427,35 @@ p {
         
         oebps.file("toc.ncx", tocNcx, { compression: "STORE" });
         
-        // 检查是否已取消
-        if (progressWindow && progressWindow.isCancelled()) {
-            throw new Error("EPUB 生成已取消");
+        if (signal?.aborted) {
+            const abortErr = new Error("EPUB 生成已取消");
+            abortErr.name = "AbortError";
+            throw abortErr;
         }
         
-        if (progressWindow) {
-            progressWindow.updateProgress(80, '正在生成 EPUB 文件...');
-        }
+        onProgress?.(80, '正在生成 EPUB 文件...');
         
         // 10. 生成 EPUB 文件（Blob）
         let epubBlob;
         try {
-            // 添加超时处理（120秒，因为 EPUB 生成可能需要一些时间）
-            // 暂时注释掉超时处理
-            // const timeoutPromise = new Promise((_, reject) => {
-            //     setTimeout(() => {
-            //         reject(new Error("EPUB 生成超时（120秒）"));
-            //     }, 120000);
-            // });
-            
-            // 使用 onUpdate 回调来监控进度
-            let lastUpdateTime = Date.now();
-            const generatePromise = zip.generateAsync({ 
+            epubBlob = await zip.generateAsync({
                 type: "blob",
-                streamFiles: false, // 暂时禁用 streamFiles，可能导致卡住
+                streamFiles: false,
                 mimeType: "application/epub+zip",
                 onUpdate: (metadata) => {
-                    const now = Date.now();
-                    lastUpdateTime = now;
-                    if (progressWindow) {
-                        const progressPercent = 80 + Math.floor(metadata.percent * 0.2); // 80-100%
-                        progressWindow.updateProgress(progressPercent, `正在压缩 EPUB 文件... ${metadata.percent.toFixed(1)}%`);
-                    }
-                }
+                    onProgress?.(80 + Math.floor(metadata.percent * 0.2), `正在压缩 EPUB 文件... ${metadata.percent.toFixed(1)}%`);
+                },
             });
-            
-            // 定期检查取消状态和更新进度，同时记录等待时间
-            // 如果 onUpdate 回调长时间未触发，说明可能卡住了
-            let waitTime = 0;
-            let lastUpdateCheck = Date.now();
-            const progressInterval = progressWindow ? setInterval(() => {
-                waitTime += 500;
-                const timeSinceLastUpdate = Date.now() - lastUpdateTime;
-                if (progressWindow.isCancelled()) {
-                    clearInterval(progressInterval);
-                    // 无法直接取消 generateAsync，但会在 await 后检查
-                } else {
-                    // 如果超过 10 秒没有 onUpdate 回调，可能卡住了
-                    if (timeSinceLastUpdate > 10000) {
-                        progressWindow.updateProgress(85, `正在压缩 EPUB 文件... (可能卡住，已等待 ${Math.floor(waitTime/1000)} 秒)`);
-                    } else {
-                        progressWindow.updateProgress(85, `正在压缩 EPUB 文件... (已等待 ${Math.floor(waitTime/1000)} 秒)`);
-                    }
-                }
-            }, 500) : null;
-            
-            try {
-                // 暂时移除超时，直接等待 generatePromise
-                // epubBlob = await Promise.race([generatePromise, timeoutPromise]);
-                epubBlob = await generatePromise;
-            } catch (awaitError) {
-                throw awaitError;
-            } finally {
-                if (progressInterval) {
-                    clearInterval(progressInterval);
-                }
-            }
-            
-            // 检查是否已取消
-            if (progressWindow && progressWindow.isCancelled()) {
-                throw new Error("EPUB 生成已取消");
-            }
-            
-            if (progressWindow) {
-                progressWindow.updateProgress(100, 'EPUB 生成完成！');
-            }
-        } catch (genError) {
-            throw genError;
+        } catch (awaitError) {
+            throw awaitError;
         }
+
+        if (signal?.aborted) {
+            const abortErr = new Error("EPUB 生成已取消");
+            abortErr.name = "AbortError";
+            throw abortErr;
+        }
+        onProgress?.(100, 'EPUB 生成完成！');
         
         return epubBlob;
     }
@@ -608,4 +484,4 @@ p {
             err("日期格式化失败:", error);
             return null;
         }
-    }
+    }

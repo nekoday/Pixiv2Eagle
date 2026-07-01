@@ -1,13 +1,14 @@
 "use strict";
 
-import { err } from "../../tampermonkey/logger.js";
-import { gmFetch } from "../../tampermonkey/request.js";
 import { getNovelSavePath } from "../../tampermonkey/setting.js";
-import { showMessage } from "../../ui/toast.js";
 import { combineNovelContent } from "../content.js";
 import { downloadNovelFiles, getFilePaths } from "../download.js";
 
-export async function saveNovelAsTextOrMarkdown(details, combinedContent, chapterFolderId) {
+/**
+ * 准备 txt/md 小说文件并返回待 add 到 Eagle 的 items（不在此处 POST）。
+ * @returns {Promise<Array<{ path: string, name: string, website: string, annotation: string, tags: string[], folderId: string }>>}
+ */
+export async function prepareNovelTextOrMarkdownItems(details, combinedContent, chapterFolderId) {
     if (!combinedContent) {
         combinedContent = combineNovelContent(details);
     }
@@ -17,7 +18,6 @@ export async function saveNovelAsTextOrMarkdown(details, combinedContent, chapte
         titleWithNumber = `${details.chapterNumber} ${details.title}`;
     }
 
-    showMessage("正在下载小说文件，请选择保存位置...", false);
     const downloadedFiles = await downloadNovelFiles(combinedContent, titleWithNumber, details.id);
 
     await new Promise((resolve) => setTimeout(resolve, 2000));
@@ -44,7 +44,6 @@ export async function saveNovelAsTextOrMarkdown(details, combinedContent, chapte
         for (let i = 0; i < filePaths.imagePaths.length; i++) {
             const imagePath = filePaths.imagePaths[i];
             const imageInfo = combinedContent.images[i];
-
             if (imagePath && imageInfo) {
                 items.push({
                     path: imagePath,
@@ -58,23 +57,5 @@ export async function saveNovelAsTextOrMarkdown(details, combinedContent, chapte
         }
     }
 
-    if (items.length > 0) {
-        try {
-            for (const item of items) {
-                const addResult = await gmFetch("http://localhost:41595/api/item/addFromPath", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify(item),
-                });
-
-                if (!addResult || !addResult.status) {
-                    err("添加文件失败:", item.path, addResult);
-                    throw new Error(`添加文件到 Eagle 失败: ${item.name || item.path}`);
-                }
-            }
-        } catch (error) {
-            err("添加小说文件到 Eagle 失败:", error);
-            throw error;
-        }
-    }
+    return items;
 }
