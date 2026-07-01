@@ -9,23 +9,41 @@ import {
     EAGLE_OPEN_ITEM_BUTTON_ID,
 } from "../../config/constants.js";
 import { checkEagle } from "../../eagle/client.js";
+import { countArtworkItemsInFolder } from "../../eagle/items.js";
 import { findSavedFolderForArtwork } from "../find-saved-folder.js";
+import { openSavedArtworkInEagle } from "../open-saved.js";
 import { getArtworkId } from "../id.js";
 import { saveCurrentArtwork } from "../save.js";
 import { openArtistFolderFromArtworkPage } from "../artist-info.js";
 import { addMoveToSubfolderButton } from "./move-subfolder.js";
 
 export async function updateSaveButtonIfSaved(saveButton) {
-    function attachOpenArtworkButton(savedInfo) {
-        const wrapper = saveButton.parentElement;
+    async function attachOpenArtworkButton(savedInfo) {
+        if (document.getElementById(EAGLE_OPEN_ITEM_BUTTON_ID)) return;
 
-        const hrefQuery = savedInfo.itemId ? `item?id=${savedInfo.itemId}` : `folder?id=${savedInfo.folder.id}`;
-        const clickHandler = () => (window.location.href = `http://localhost:41595/${hrefQuery}`);
+        const wrapper = saveButton.parentElement;
+        const artworkIdForOpen = artworkId;
 
         const openButton = createPixivStyledButton("🔍");
         openButton.id = EAGLE_OPEN_ITEM_BUTTON_ID;
         openButton.title = "在 Eagle 中打开此作品";
-        openButton.onclick = clickHandler;
+        openButton.onclick = () => {
+            void openSavedArtworkInEagle({
+                artworkId: artworkIdForOpen,
+                folderId: savedInfo.folder.id,
+                itemId: savedInfo.itemId,
+                mode: "detail",
+            });
+        };
+
+        try {
+            const itemCount = await countArtworkItemsInFolder(artworkIdForOpen, savedInfo.folder.id);
+            if (itemCount > 1) {
+                openButton.title = "在 Eagle 中打开作品文件夹";
+            }
+        } catch {
+            // 计数失败保留默认单 p title
+        }
 
         wrapper.insertBefore(openButton, saveButton.nextSibling);
     }
@@ -41,7 +59,7 @@ export async function updateSaveButtonIfSaved(saveButton) {
 
         if (savedInfo && savedInfo.folder) {
             saveButton.textContent = "✅ 此作品已保存";
-            attachOpenArtworkButton(savedInfo);
+            await attachOpenArtworkButton(savedInfo);
         }
     } catch (error) {
         err("检测保存状态时出错:", error);
@@ -90,4 +108,30 @@ export async function addButton() {
     if (getAutoCheckSavedStatus()) updateSaveButtonIfSaved(saveButton);
 
     addMoveToSubfolderButton();
+}
+
+export function handleSavedEventForArtworkDetail(payload) {
+    const { kind, id } = payload;
+    if (kind !== "artwork" && kind !== "manga-chapter") return;
+
+    const artworkId = getArtworkId();
+    if (!artworkId || id !== artworkId) return;
+
+    const wrapper = document.getElementById(EAGLE_SAVE_BUTTON_ID);
+    if (!wrapper) return;
+
+    let saveButton = null;
+    for (const child of wrapper.children) {
+        if (child.id === EAGLE_OPEN_ITEM_BUTTON_ID) continue;
+        const text = child.textContent;
+        if (text === "保存到 Eagle" || text === "✅ 此作品已保存") {
+            saveButton = child;
+            break;
+        }
+    }
+    if (!saveButton) return;
+
+    if (saveButton.textContent === "✅ 此作品已保存") return;
+
+    updateSaveButtonIfSaved(saveButton);
 }

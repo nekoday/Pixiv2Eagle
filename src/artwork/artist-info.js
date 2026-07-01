@@ -6,6 +6,7 @@ import { gmFetch } from "../tampermonkey/request.js";
 import { showMessage } from "../ui/toast.js";
 import { PIXIV_ARTIST_DIV_CLASS } from "../config/constants.js";
 import { checkEagle } from "../eagle/client.js";
+import { openEagleFolder } from "../eagle/deep-link.js";
 import { findArtistFolder } from "../eagle/artist.js";
 import { getArtistMatcher } from "../eagle/artist-matcher.js";
 import { getArtworkId } from "./id.js";
@@ -62,8 +63,7 @@ export async function openArtistFolderInEagle(artistInfo) {
         return;
     }
 
-    const eagleUrl = `http://localhost:41595/folder?id=${artistFolder.id}`;
-    window.location.href = eagleUrl;
+    openEagleFolder(artistFolder.id);
 
     const artistMatcher = getArtistMatcher();
     const targetFolderName = artistMatcher.generate(artistInfo.userId, artistInfo.userName);
