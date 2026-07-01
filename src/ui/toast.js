@@ -7,12 +7,13 @@ function getDebugMode() {
 }
 
 // ========== Toast 通知系统 ==========
-// 右上角三色滑入式 toast，替代 alert()。最多 3 条堆叠，success/info 3s、error 5s 自动消失。
+// 右上角四色滑入式 toast，替代 alert()。最多 3 条堆叠，success/info/warning 3s、error 5s 自动消失。
 
 const TOAST_CONFIG = {
     success: { className: "p2e-toast p2e-toast--success", icon: "✅", duration: 3000, dismissible: false },
     error:   { className: "p2e-toast p2e-toast--error", icon: "❌", duration: 5000, dismissible: true },
     info:    { className: "p2e-toast p2e-toast--info", icon: "ℹ️", duration: 3000, dismissible: false },
+    warning: { className: "p2e-toast p2e-toast--warning", icon: "⚠️", duration: 3000, dismissible: false },
 };
 const TOAST_MAX_VISIBLE = 3;
 const TOAST_SLIDE_MS = 300;
@@ -37,7 +38,7 @@ function dismissToast(element) {
 /**
  * 显示一条 toast 通知
  * @param {string} message
- * @param {"success"|"error"|"info"} [type="info"]
+ * @param {"success"|"error"|"info"|"warning"} [type="info"]
  */
 export function showToast(message, type = "info") {
     if (!document.body) return;
