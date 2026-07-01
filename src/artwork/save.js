@@ -11,11 +11,14 @@ import { checkEagle } from "../eagle/client.js";
 import { createEagleFolder, getSeriesFolder } from "../eagle/folder.js";
 import { getArtistFolder } from "../eagle/artist.js";
 import { getTypeFolderInfo, getOrCreateTypeFolder } from "../eagle/type-folder.js";
-import { saveToEagle } from "../eagle/items.js";
-import { invalidateEagleIndex } from "../eagle/index-cache.js";
+import { saveToEagleSequential, getAllEagleItemsInFolder } from "../eagle/items.js";
+import { publishSaved } from "../shared/marking/saved-event-bus.js";
+import { waitForArtworkPersist, waitForFolderCountPersist } from "../eagle/save-poller.js";
 import { convertUgoiraToGifBlob, blobToDataURL } from "./ugoira/convert.js";
 import { getArtworkId } from "./id.js";
 import { getArtworkDetails } from "./details.js";
+import { createSaveProgressTask } from "../ui/save-progress/index.js";
+import { SAVE_STAGE } from "../ui/save-progress/types.js";
 
 // 保存当前作品到 Eagle
 export async function saveCurrentArtwork() {
@@ -34,8 +37,20 @@ export async function saveCurrentArtwork() {
         return;
     }
 
+    let task;
     try {
+        task = createSaveProgressTask({
+            artworkId,
+            title: "加载中…",
+            pageCount: 1,
+        });
+        task.reportStage(SAVE_STAGE.FETCHING, { current: 0, total: 1 });
+
         const details = await getArtworkDetails(artworkId);
+        task.updateArtworkInfo({ title: details.illustTitle, pageCount: details.pageCount });
+        task.reportStage(SAVE_STAGE.FETCHING, { current: 1, total: 1 });
+
+        task.reportStage(SAVE_STAGE.FOLDER, { current: 0, total: 1 });
 
         const artistFolder = await getArtistFolder(folderId, details.userId, details.userName);
         let targetFolderId = artistFolder.id;
@@ -65,36 +80,81 @@ export async function saveCurrentArtwork() {
             targetFolderId = await createEagleFolder(details.illustTitle, targetFolderId, artworkId);
         }
 
+        task.reportStage(SAVE_STAGE.FOLDER, { current: 1, total: 1 });
+
         let imageUrls = details.originalUrls;
         if (details.illustType === 2) {
-            const gifBlob = await convertUgoiraToGifBlob(artworkId);
+            task.reportStage(SAVE_STAGE.CONVERTING, { current: 0, total: 1 });
+            const gifBlob = await convertUgoiraToGifBlob(artworkId, {
+                signal: task.signal,
+                onFrameProgress: ({ current, total }) => {
+                    task.reportStage(SAVE_STAGE.CONVERTING, { current, total });
+                    task.reportFrameProgress({ current, total });
+                },
+            });
+            task.reportStage(SAVE_STAGE.CONVERTING, { current: 1, total: 1 });
             imageUrls = [await blobToDataURL(gifBlob)];
         }
 
-        await saveToEagle(imageUrls, targetFolderId, details, artworkId);
+        const pageTotal = imageUrls.length;
 
-        invalidateEagleIndex();
+        // 多页：上传前在目标文件夹采集 baseline（不复用会话缓存）；单页用 isArtworkSavedInEagle 确认
+        let baselineCount = 0;
+        if (pageTotal > 1) {
+            const baselineItems = await getAllEagleItemsInFolder(targetFolderId);
+            baselineCount = baselineItems.length;
+        }
 
-        const message = [
-            `✅ ${details.illustType === 2 ? "动图已转换为 GIF 并" : "图片已成功"}保存到 Eagle`,
-            "----------------------------",
-            folderInfo,
-            `画师专属文件夹: ${artistFolder.name} (ID: ${artistFolder.id})`,
-            "----------------------------",
-            `Eagle版本: ${eagleStatus.version}`,
-            "----------------------------",
-            `作品ID: ${artworkId}`,
-            `作者: ${details.userName} (ID: ${details.userId})`,
-            `作品名称: ${details.illustTitle}`,
-            `作品类型： ${details.illustType === 2 ? "动图 (ugoira)" : details.illustType === 1 ? "漫画" : "插画"}`,
-            `页数: ${details.pageCount}`,
-            `上传时间: ${details.uploadDate}`,
-            `标签: ${details.tags.join(", ")}`,
-        ].join("\n");
+        task.reportStage(SAVE_STAGE.UPLOADING, { current: 0, total: pageTotal });
 
-        showMessage(message);
+        const waitForPersist = ({ pageIndex, pageTotal: pt, baselineCount: base, signal, onEagleProgress }) => {
+            if (pt === 1) {
+                return waitForArtworkPersist({
+                    artworkId,
+                    folderId: targetFolderId,
+                    signal,
+                    onProgress: () => onEagleProgress?.({ current: 1, total: 1 }),
+                });
+            }
+            return waitForFolderCountPersist({
+                folderId: targetFolderId,
+                baselineCount: base,
+                target: pageIndex + 1,
+                signal,
+                onProgress: (persisted) => onEagleProgress?.({ current: Math.min(persisted, pt), total: pt }),
+            });
+        };
+
+        const { itemId } = await saveToEagleSequential(imageUrls, targetFolderId, details, artworkId, {
+            signal: task.signal,
+            baselineCount,
+            onSubmitProgress: ({ current, total }) => {
+                task.reportSubmitProgress({ current, total });
+            },
+            onEagleProgress: ({ current, total }) => {
+                task.reportEagleProgress({ current, total });
+            },
+            waitForPersist,
+        });
+
+        const kind = details.illustType === 1 && details.seriesNavData ? "manga-chapter" : "artwork";
+        publishSaved({
+            kind,
+            id: artworkId,
+            userId: details.userId,
+            folderId: targetFolderId,
+            itemId,
+            savedAt: Date.now(),
+        });
+        task.complete({ folderId: targetFolderId, itemId, pageCount: pageTotal, openSavedArtwork: true });
     } catch (error) {
         err(error);
-        showMessage(`${folderInfo}\n保存图片失败: ${error.message}`, true);
+        if (error.name === "AbortError") {
+            if (!task.signal.aborted) task.abort();
+            throw error;
+        }
+        const msg = error.message || "保存失败";
+        task.fail(`${folderInfo}\n${msg}`.replace(/\n/g, " "));
+        throw error;
     }
 }

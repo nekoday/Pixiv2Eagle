@@ -13,7 +13,7 @@ export async function blobToDataURL(blob) {
 }
 
 // 将动图转换为 GIF Blob
-export async function convertUgoiraToGifBlob(artworkId) {
+export async function convertUgoiraToGifBlob(artworkId, { onFrameProgress, signal } = {}) {
     await ensureFflateLoaded();
     await ensureGifLibLoaded();
 
@@ -23,6 +23,20 @@ export async function convertUgoiraToGifBlob(artworkId) {
 
     if (!entries || !meta.frames || meta.frames.length === 0) {
         throw new Error("动图数据不完整");
+    }
+
+    const frameTotal = meta.frames.length;
+
+    function checkAborted() {
+        if (signal?.aborted) {
+            const err = new Error("保存已取消");
+            err.name = "AbortError";
+            throw err;
+        }
+    }
+
+    function reportFrame(index) {
+        onFrameProgress?.({ current: index + 1, total: frameTotal });
     }
 
     const guessMime = (name) => (name.toLowerCase().endsWith(".png") ? "image/png" : "image/jpeg");
@@ -45,11 +59,14 @@ export async function convertUgoiraToGifBlob(artworkId) {
         workerScript: getGifWorkerURL(),
     });
 
+    checkAborted();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(firstImg, 0, 0);
     gif.addFrame(ctx, { copy: true, delay: Math.max(20, first.delay || 100) });
+    reportFrame(0);
 
     for (let i = 1; i < meta.frames.length; i++) {
+        checkAborted();
         const f = meta.frames[i];
         const bytes = entries[f.file];
         if (!bytes) throw new Error("压缩包中缺少帧文件: " + f.file);
@@ -57,8 +74,10 @@ export async function convertUgoiraToGifBlob(artworkId) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0);
         gif.addFrame(ctx, { copy: true, delay: Math.max(20, f.delay || 100) });
+        reportFrame(i);
     }
 
+    checkAborted();
     const blob = await new Promise((resolve) => {
         gif.on("finished", (b) => resolve(b));
         gif.render();
