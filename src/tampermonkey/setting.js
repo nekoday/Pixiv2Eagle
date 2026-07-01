@@ -15,6 +15,10 @@ export const SETTING_KEYS = Object.freeze({
     NOVEL_SAVE_PATH: "novelSavePath",
     NOVEL_SAVE_FORMAT: "novelSaveFormat",
     UI_THEME: "uiTheme",
+    FILTER_REC_SAME_AUTHOR: "filterRecSameAuthor",
+    FILTER_REC_SAME_AUTHOR_MODE: "filterRecSameAuthorMode",
+    FILTER_REC_SAVED_MODE: "filterRecSavedMode",
+    EAGLE_SAVE_POLL_TIMEOUT_MS: "eagleSavePollTimeoutMs",
 });
 
 export const SETTING_DEFAULTS = Object.freeze({
@@ -29,6 +33,10 @@ export const SETTING_DEFAULTS = Object.freeze({
     [SETTING_KEYS.NOVEL_SAVE_PATH]: "",
     [SETTING_KEYS.NOVEL_SAVE_FORMAT]: "txt",
     [SETTING_KEYS.UI_THEME]: "system",
+    [SETTING_KEYS.FILTER_REC_SAME_AUTHOR]: false,
+    [SETTING_KEYS.FILTER_REC_SAME_AUTHOR_MODE]: "remove",
+    [SETTING_KEYS.FILTER_REC_SAVED_MODE]: "mark",
+    [SETTING_KEYS.EAGLE_SAVE_POLL_TIMEOUT_MS]: 120000,
 });
 
 let _invalidateEagleIndex = null;
@@ -45,21 +53,18 @@ export function getFolderId() {
     return GM_getValue(SETTING_KEYS.PIXIV_FOLDER_ID, SETTING_DEFAULTS[SETTING_KEYS.PIXIV_FOLDER_ID]);
 }
 
-// 设置文件夹 ID
-export function setFolderId() {
-    const currentId = getFolderId();
-    const userInput = prompt("请输入 Pixiv 文件夹 ID 或 Eagle 文件夹链接：", currentId);
-
-    if (userInput === null) return;
-
+/**
+ * 从用户输入解析 Pixiv 根文件夹 ID（支持 Eagle 链接 folder?id=）
+ * @param {string} userInput
+ * @returns {string}
+ */
+export function parsePixivFolderIdInput(userInput) {
     let finalId = userInput.trim();
     const urlParam = "folder?id=";
     const urlIndex = finalId.indexOf(urlParam);
 
     if (urlIndex !== -1) {
-        // 如果输入的是链接，提取 ID
         finalId = finalId.substring(urlIndex + urlParam.length);
-        // 移除可能的后续参数（虽然 Eagle 链接通常没有）
         const queryParamIndex = finalId.indexOf("?");
         if (queryParamIndex !== -1) {
             finalId = finalId.substring(0, queryParamIndex);
@@ -69,9 +74,17 @@ export function setFolderId() {
             finalId = finalId.substring(0, hashIndex);
         }
     }
+    return finalId.trim();
+}
 
-    // 再次 trim 以防万一
-    finalId = finalId.trim();
+// 设置文件夹 ID
+export function setFolderId() {
+    const currentId = getFolderId();
+    const userInput = prompt("请输入 Pixiv 文件夹 ID 或 Eagle 文件夹链接：", currentId);
+
+    if (userInput === null) return;
+
+    const finalId = parsePixivFolderIdInput(userInput);
 
     GM_setValue(SETTING_KEYS.PIXIV_FOLDER_ID, finalId);
 
@@ -149,15 +162,19 @@ export function getAutoCheckSavedStatus() {
     return GM_getValue(SETTING_KEYS.AUTO_CHECK_SAVED_STATUS, SETTING_DEFAULTS[SETTING_KEYS.AUTO_CHECK_SAVED_STATUS]);
 }
 
-// 强制更新 Eagle 索引
+/**
+ * 强制更新 Eagle 索引
+ * @returns {Promise<{ ok: true } | { ok: false, error: string }>}
+ */
 export async function forceRefreshEagleIndex() {
     try {
         _invalidateEagleIndex();
         await _ensureEagleIndex(true);
-        alert("✅ Eagle 索引已强制更新完成");
+        return { ok: true };
     } catch (error) {
         err("强制更新索引失败:", error);
-        alert(`❌ 强制更新索引失败: ${error.message}`);
+        const message = (error && error.message) ? error.message : String(error);
+        return { ok: false, error: message };
     }
 }
 
@@ -188,9 +205,60 @@ export function getNovelSaveFormat() {
     return GM_getValue(SETTING_KEYS.NOVEL_SAVE_FORMAT, SETTING_DEFAULTS[SETTING_KEYS.NOVEL_SAVE_FORMAT]);
 }
 
+// 获取落盘等待轮询超时（毫秒）；非法值回退默认 120000
+export function getEagleSavePollTimeoutMs() {
+    const raw = GM_getValue(
+        SETTING_KEYS.EAGLE_SAVE_POLL_TIMEOUT_MS,
+        SETTING_DEFAULTS[SETTING_KEYS.EAGLE_SAVE_POLL_TIMEOUT_MS]
+    );
+    const ms = Number(raw);
+    return Number.isFinite(ms) && ms > 0 ? ms : SETTING_DEFAULTS[SETTING_KEYS.EAGLE_SAVE_POLL_TIMEOUT_MS];
+}
+
+// 菜单：设置落盘等待超时（秒）
+export function setEagleSavePollTimeout() {
+    const currentSec = Math.round(getEagleSavePollTimeoutMs() / 1000);
+    const userInput = prompt("请输入 Eagle 落盘等待超时（秒，建议 30–300）：", String(currentSec));
+    if (userInput === null) return;
+    const sec = Number(userInput.trim());
+    if (!Number.isFinite(sec) || sec <= 0) {
+        alert("无效的秒数，未修改");
+        return;
+    }
+    GM_setValue(SETTING_KEYS.EAGLE_SAVE_POLL_TIMEOUT_MS, Math.round(sec * 1000));
+    alert(`落盘等待超时已设置为 ${Math.round(sec)} 秒`);
+}
+
 // 获取界面主题偏好
 export function getUiTheme() {
     return GM_getValue(SETTING_KEYS.UI_THEME, SETTING_DEFAULTS[SETTING_KEYS.UI_THEME]);
+}
+
+// 获取是否过滤推荐区同作者作品
+export function getFilterRecSameAuthor() {
+    return GM_getValue(
+        SETTING_KEYS.FILTER_REC_SAME_AUTHOR,
+        SETTING_DEFAULTS[SETTING_KEYS.FILTER_REC_SAME_AUTHOR]
+    );
+}
+
+// 获取推荐区同作者过滤模式（remove | blur）
+export function getFilterRecSameAuthorMode() {
+    const v = GM_getValue(
+        SETTING_KEYS.FILTER_REC_SAME_AUTHOR_MODE,
+        SETTING_DEFAULTS[SETTING_KEYS.FILTER_REC_SAME_AUTHOR_MODE]
+    );
+    return v === "blur" ? "blur" : "remove";
+}
+
+// 获取推荐区已保存作品展示模式（mark | blur | hide）
+export function getFilterRecSavedMode() {
+    const v = GM_getValue(
+        SETTING_KEYS.FILTER_REC_SAVED_MODE,
+        SETTING_DEFAULTS[SETTING_KEYS.FILTER_REC_SAVED_MODE]
+    );
+    if (v === "blur" || v === "hide") return v;
+    return "mark";
 }
 
 // 三态轮询切换界面主题：light → dark → system

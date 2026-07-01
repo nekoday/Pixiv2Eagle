@@ -1,39 +1,33 @@
 "use strict";
 
-import {
-    setFolderId,
-    makeToggle,
-    toggleCreateSubFolder,
-    setNovelSavePath,
-    setNovelSaveFormat,
-    cycleUiTheme,
-    forceRefreshEagleIndex,
-    SETTING_KEYS,
-    SETTING_DEFAULTS,
-} from "./setting.js";
-import { saveCurrentArtwork } from "../artwork/save.js";
-import { setArtistMatcher } from "../eagle/artist-matcher.js";
-import { applyTheme } from "../ui/theme.js";
+import { openControlPanel } from "../ui/control-panel/index.js";
+import { refreshEagleIndexFromPanel, set, getSnapshot } from "./settings-api.js";
+import { pushAction } from "../ui/control-panel/action-log.js";
 import { showToast } from "../ui/toast.js";
 
-function setUiTheme() {
-    const { label } = cycleUiTheme();
-    applyTheme();
-    showToast(`界面主题：${label}`, "info");
+async function handleForceRefreshEagleIndex() {
+    pushAction({ label: "强制更新索引", status: "pending" });
+    const result = await refreshEagleIndexFromPanel();
+    if (result.ok) {
+        pushAction({ label: "强制更新索引", status: "success" });
+        showToast("Eagle 索引已强制更新完成", "success");
+    } else {
+        pushAction({ label: "强制更新索引", status: "error", message: result.error });
+        showToast(`强制更新索引失败: ${result.error}`, "error");
+    }
+}
+
+function toggleDebugMode() {
+    const current = getSnapshot().settings.debugMode;
+    const next = !current;
+    set("debugMode", next);
+    const stateText = next ? "开启 ✅" : "关闭 ❌";
+    pushAction({ label: "调试模式", status: "success", message: stateText });
+    showToast(`调试模式已${next ? "开启" : "关闭"}`, "info");
 }
 
 export function registerMenuCommands() {
-    GM_registerMenuCommand("📁 设置 Pixiv 文件夹 ID", setFolderId);
-    GM_registerMenuCommand("📅 切换：使用投稿时间作为添加日期", makeToggle({ key: SETTING_KEYS.USE_UPLOAD_DATE, label: "使用投稿时间作为添加日期" }));
-    GM_registerMenuCommand("🕗 切换：保存作品描述", makeToggle({ key: SETTING_KEYS.SAVE_DESCRIPTION, label: "保存作品描述", defaultValue: SETTING_DEFAULTS[SETTING_KEYS.SAVE_DESCRIPTION] }));
-    GM_registerMenuCommand("🗂️ 切换：为多页作品创建子文件夹", toggleCreateSubFolder);
-    GM_registerMenuCommand("🗂️ 切换：按类型保存", makeToggle({ key: SETTING_KEYS.SAVE_BY_TYPE, label: "按类型保存" }));
-    GM_registerMenuCommand("🖼️ 保存当前作品到 Eagle", saveCurrentArtwork);
-    GM_registerMenuCommand("🔎 切换：自动检测作品保存状态", makeToggle({ key: SETTING_KEYS.AUTO_CHECK_SAVED_STATUS, label: "自动检测作品保存状态", onText: "开启", offText: "关闭" }));
-    GM_registerMenuCommand("🔄 强制更新 Eagle 索引", forceRefreshEagleIndex);
-    GM_registerMenuCommand("📂 设置小说保存路径", setNovelSavePath);
-    GM_registerMenuCommand("📚 切换：小说保存格式 (TXT/MD/EPUB)", setNovelSaveFormat);
-    GM_registerMenuCommand("🎨 界面主题 (浅色/深色/跟随系统)", setUiTheme);
-    GM_registerMenuCommand("🧪 切换：调试模式", makeToggle({ key: SETTING_KEYS.DEBUG_MODE, label: "调试模式" }));
-    GM_registerMenuCommand("🧪 设置画师文件夹名称模板", setArtistMatcher);
+    GM_registerMenuCommand("⚙️ 打开控制面板", openControlPanel);
+    GM_registerMenuCommand("🔄 强制更新 Eagle 索引", handleForceRefreshEagleIndex);
+    GM_registerMenuCommand("🧪 切换：调试模式", toggleDebugMode);
 }
