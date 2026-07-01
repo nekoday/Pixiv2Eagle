@@ -85,40 +85,117 @@ export async function isArtworkSavedInEagle(artworkId, folderId) {
     return { saved: false, itemId: null };
 }
 
-// 保存图片到 Eagle
-export async function saveToEagle(imageUrls, folderId, details, artworkId) {
+/**
+ * 统计 folderId 内 url 匹配 https://www.pixiv.net/artworks/{artworkId} 的 item 数量。
+ * @param {string} artworkId
+ * @param {string} folderId
+ * @returns {Promise<number>}
+ */
+export async function countArtworkItemsInFolder(artworkId, folderId) {
+    if (!folderId) {
+        return 0;
+    }
+
+    const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
+    const limit = EAGLE_ITEM_LIST_LIMIT;
+
+    try {
+        let offset = 0;
+        let loopCount = 0;
+        let count = 0;
+
+        while (loopCount < EAGLE_ITEM_LIST_MAX_PAGES) {
+            const params = new URLSearchParams({
+                folders: folderId,
+                limit: limit.toString(),
+                offset: offset.toString(),
+            });
+
+            const data = await gmFetch(`http://localhost:41595/api/item/list?${params.toString()}`);
+            if (!data || !data.status) break;
+
+            const items = Array.isArray(data.data)
+                ? data.data
+                : Array.isArray(data.data?.items)
+                ? data.data.items
+                : [];
+
+            const fastMatchedIds = new Set();
+            for (const item of items) {
+                if (item.url === artworkUrl) {
+                    fastMatchedIds.add(item.id);
+                    count += 1;
+                }
+            }
+
+            const needDeepCheck = items.filter((item) => !fastMatchedIds.has(item.id));
+            if (needDeepCheck.length > 0) {
+                const concurrency = EAGLE_ITEM_INFO_CONCURRENCY;
+                for (let i = 0; i < needDeepCheck.length; i += concurrency) {
+                    const chunk = needDeepCheck.slice(i, i + concurrency);
+                    const results = await Promise.all(
+                        chunk.map(async (item) => {
+                            try {
+                                const infoData = await gmFetch(`http://localhost:41595/api/item/info?id=${item.id}`);
+                                if (infoData && infoData.data && infoData.data.url === artworkUrl) {
+                                    return item.id;
+                                }
+                            } catch (e) {
+                                // 忽略单个获取失败
+                            }
+                            return null;
+                        })
+                    );
+                    for (const id of results) {
+                        if (id) count += 1;
+                    }
+                }
+            }
+
+            if (items.length === 0) break;
+            if (items.length < limit) break;
+            offset += items.length;
+            loopCount += 1;
+        }
+
+        return count;
+    } catch (error) {
+        err("统计作品数量失败:", error);
+        return 0;
+    }
+}
+
+function buildAddFromURLsItem(url, index, imageUrls, details, artworkId) {
     const baseTitle = details.illustTitle;
     const isMultiPage = imageUrls.length > 1;
     const artworkUrl = `https://www.pixiv.net/artworks/${artworkId}`;
-
-    // 根据设置决定是否使用投稿时间
     const useUploadDate = getUseUploadDate();
     const modificationTime = useUploadDate ? new Date(details.uploadDate).getTime() : undefined;
-
-    // 根据设置决定是否保存描述
     const shouldSaveDescription = getSaveDescription();
     const annotation = shouldSaveDescription ? details.description : undefined;
 
-    // 批量添加图片
+    return {
+        url,
+        name: isMultiPage ? `${baseTitle}_${index}` : baseTitle,
+        website: artworkUrl,
+        tags: details.tags,
+        ...(annotation && { annotation }),
+        ...(modificationTime && { modificationTime }),
+        ...(url.startsWith("data:") ? {} : {
+            headers: { referer: "https://www.pixiv.net/" },
+        }),
+    };
+}
+
+// 保存图片到 Eagle
+export async function saveToEagle(imageUrls, folderId, details, artworkId) {
     const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
         },
         body: JSON.stringify({
-            items: imageUrls.map((url, index) => ({
-                url,
-                name: isMultiPage ? `${baseTitle}_${index}` : baseTitle,
-                website: artworkUrl,
-                tags: details.tags,
-                ...(annotation && { annotation }),
-                ...(modificationTime && { modificationTime }),
-                ...(url.startsWith("data:") ? {} : {
-                    headers: {
-                        referer: "https://www.pixiv.net/",
-                    },
-                }),
-            })),
+            items: imageUrls.map((url, index) => buildAddFromURLsItem(url, index, imageUrls, details, artworkId)),
             folderId,
         }),
     });
@@ -128,6 +205,72 @@ export async function saveToEagle(imageUrls, folderId, details, artworkId) {
     }
 
     return data.data;
+}
+
+/**
+ * 逐张提交，每张提交成功后通过注入的 waitForPersist 等待落盘确认。
+ *
+ * @param {string[]} imageUrls
+ * @param {string} folderId
+ * @param {object} details
+ * @param {string} artworkId
+ * @param {{
+ *   onSubmitProgress?: (p: { current: number, total: number }) => void,
+ *   onEagleProgress?: (p: { current: number, total: number }) => void,
+ *   signal?: AbortSignal,
+ *   baselineCount?: number,
+ *   waitForPersist?: (args: {
+ *     pageIndex: number,
+ *     pageTotal: number,
+ *     baselineCount: number,
+ *     signal?: AbortSignal,
+ *     onEagleProgress?: (p: { current: number, total: number }) => void,
+ *   }) => Promise<void>,
+ * }} [options]
+ */
+export async function saveToEagleSequential(imageUrls, folderId, details, artworkId, options = {}) {
+    const { onSubmitProgress, onEagleProgress, signal, baselineCount = 0, waitForPersist } = options;
+    const total = imageUrls.length;
+    if (total === 0) {
+        throw new Error("无图片可上传");
+    }
+
+    for (let i = 0; i < total; i++) {
+        if (signal?.aborted) {
+            const abortErr = new Error("保存已取消");
+            abortErr.name = "AbortError";
+            throw abortErr;
+        }
+
+        const url = imageUrls[i];
+        const data = await gmFetch("http://localhost:41595/api/item/addFromURLs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                items: [buildAddFromURLsItem(url, i, imageUrls, details, artworkId)],
+                folderId,
+            }),
+        });
+
+        if (!data.status) {
+            throw new Error(total > 1 ? `第 ${i + 1} 张提交失败` : "保存图片失败");
+        }
+
+        onSubmitProgress?.({ current: i + 1, total });
+
+        if (waitForPersist) {
+            await waitForPersist({
+                pageIndex: i,
+                pageTotal: total,
+                baselineCount,
+                signal,
+                onEagleProgress,
+            });
+        }
+    }
+
+    const { itemId } = await isArtworkSavedInEagle(artworkId, folderId);
+    return { itemId };
 }
 
 // 获取指定 Eagle 文件夹下所有 items（分页）

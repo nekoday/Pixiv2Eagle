@@ -34,6 +34,35 @@ export function deserializeIndex(data) {
     return index;
 }
 
+/**
+ * 向内存索引增量写入；若索引尚未加载则 no-op（不触发 ensureEagleIndex）。
+ * @param {{ userId: string, pid: string, folderId?: string }} params
+ */
+export function patchEagleIndex({ userId, pid, folderId }) {
+    const index = window.__pixiv2eagle_globalEagleIndex;
+    if (!index) return;
+
+    const artistData = index.get(userId);
+    if (artistData) {
+        artistData.pids.add(pid);
+    } else {
+        index.set(userId, { id: folderId, pids: new Set([pid]) });
+    }
+
+    try {
+        const pixivFolderId = getFolderId();
+        if (!pixivFolderId) return;
+
+        saveEagleIndexCache({
+            index: serializeIndex(index),
+            expireTime: Date.now() + INDEX_EXPIRE_TIME,
+            pixivFolderId,
+        });
+    } catch (e) {
+        warn("保存索引 patch 失败:", e);
+    }
+}
+
 // 使索引失效（清除缓存）
 export function invalidateEagleIndex() {
     // 清除持久化存储

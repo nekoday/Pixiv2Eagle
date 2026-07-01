@@ -97,3 +97,4 @@ export async function getSeriesFolder(artistFolder, artistId, seriesId, seriesNa
         children: [],
     };
 }
+
