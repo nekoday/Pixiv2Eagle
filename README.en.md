@@ -78,10 +78,11 @@ A Tampermonkey script for saving Pixiv artworks to Eagle image management softwa
   - The page button changes to "Open Save Folder"
 
 ### Artist Folders
-- Only applies in default mode
+- Only applies in the "create artist subfolders" mode; when "save directly to the Pixiv folder" is enabled, artist folders are neither created nor used
 - Each artist will have a dedicated folder created under the configured Pixiv folder
 - The folder name uses the artist's name
 - The folder description includes the artist's ID for easier management
+- On a Pixiv artist page, click the `📁` button next to the Follow button to open that artist's existing folder in Eagle; if no artwork from that artist has been saved yet, the script will prompt you to save one first
 - Implementation logic:
   1. First, check if a dedicated folder for the artist already exists under the Pixiv main folder
   2. Identify artist folders through the `pid = artistID` in the folder description
